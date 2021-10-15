@@ -31,10 +31,11 @@ internal class IonSchemaSystemImpl(
     private val authorities: List<Authority>,
     private val constraintFactory: ConstraintFactory,
     private val schemaCache: SchemaCache,
-    private val params: Map<Param, Any>
+    private val params: Map<Param<out Any>, Any>
 ) : IonSchemaSystem {
 
     private val schemaCore = SchemaCore(this)
+
     // Set to be used to detect cycle in import dependencies
     private val schemaImportSet: MutableSet<String> = mutableSetOf<String>()
 
@@ -74,9 +75,10 @@ internal class IonSchemaSystemImpl(
 
     internal fun getSchemaImportSet() = schemaImportSet
 
-    internal fun hasParam(param: Param) = params.containsKey(param)
+    internal inline fun <reified T : Any> getParam(param: Param<T>): T = params[param] as? T ?: param.defaultValue
 
-    internal enum class Param {
-        ALLOW_ANONYMOUS_TOP_LEVEL_TYPES, // for backwards compatibility with v1.0
+    internal sealed class Param<T : Any>(val defaultValue: T) {
+        object ALLOW_ANONYMOUS_TOP_LEVEL_TYPES : Param<Boolean>(false) // for backwards compatibility with v1.0
+        object ALLOW_TRANSITIVE_IMPORTS : Param<Boolean>(false) // for backwards compatibility with v1.1
     }
 }

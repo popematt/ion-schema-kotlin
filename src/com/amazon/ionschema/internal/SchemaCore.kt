@@ -69,6 +69,10 @@ internal class SchemaCore(
 
     override fun getTypes() = typeMap.values.iterator()
 
+    override fun getDeclaredType(name: String): Type? = getType(name)
+
+    override fun getDeclaredTypes(): Iterator<Type> = getTypes()
+
     override fun getSchemaSystem() = schemaSystem
 
     override fun newType(isl: String) = throw UnsupportedOperationException()

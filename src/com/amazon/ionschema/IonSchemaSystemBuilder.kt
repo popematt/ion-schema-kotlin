@@ -39,7 +39,7 @@ class IonSchemaSystemBuilder private constructor() {
     private var constraintFactory = defaultConstraintFactory
     private var ionSystem = IonSystemBuilder.standard().build()
     private var schemaCache: SchemaCache? = null
-    private var params = mutableMapOf<IonSchemaSystemImpl.Param, Any>()
+    private var params = mutableMapOf<IonSchemaSystemImpl.Param<*>, Any>()
 
     /**
      * Adds the provided authority to the list of [Authority]s.
@@ -93,7 +93,18 @@ class IonSchemaSystemBuilder private constructor() {
      */
     @Deprecated("For backwards compatibility with v1.0")
     fun allowAnonymousTopLevelTypes(): IonSchemaSystemBuilder {
-        params.put(IonSchemaSystemImpl.Param.ALLOW_ANONYMOUS_TOP_LEVEL_TYPES, Object())
+        params.put(IonSchemaSystemImpl.Param.ALLOW_ANONYMOUS_TOP_LEVEL_TYPES, true)
+        return this
+    }
+
+    /**
+     * TODO
+     *
+     * @since 1.2
+     */
+    @Deprecated("For backwards compatibility with v1.1")
+    fun allowTransitiveImports(): IonSchemaSystemBuilder {
+        params.put(IonSchemaSystemImpl.Param.ALLOW_TRANSITIVE_IMPORTS, true)
         return this
     }
 
@@ -108,4 +119,15 @@ class IonSchemaSystemBuilder private constructor() {
         schemaCache ?: SchemaCacheDefault(),
         params
     )
+}
+
+class Foo<T>(val bar: Map<String, Any>) {
+    fun getString(key: String): String? = bar[key] as? String
+
+    // Warning: Unchecked cast: Any? to T
+    fun getT(key: String): T? = bar[key] as? T
+
+
+    // Warning: Unchecked cast: Any? to T
+    inline fun <reified U> getU(key: String): U? = bar[key] as? U
 }

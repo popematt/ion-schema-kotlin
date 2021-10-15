@@ -58,6 +58,8 @@ internal class SchemaImpl private constructor(
 
     private val imports: Map<String, Import>
 
+    private val declaredTypes: Map<String, TypeImpl>
+
     init {
         val dgIsl = schemaSystem.getIonSystem().newDatagram()
 
@@ -103,6 +105,10 @@ internal class SchemaImpl private constructor(
         }
 
         isl = dgIsl.markReadOnly()
+        declaredTypes = types.values.filterIsInstance<TypeImpl>()
+            .filter { (it.isl as? IonStruct)?.containsKey("name") ?: false }
+            .filter { it.schemaId == this.schemaId }
+            .associateBy { it.name }
     }
 
     private class SchemaAndTypeImports(val id: String, val schema: Schema) {
@@ -126,6 +132,7 @@ internal class SchemaImpl private constructor(
 
         val importsMap = mutableMapOf<String, SchemaAndTypeImports>()
         val importSet: MutableSet<String> = schemaSystem.getSchemaImportSet()
+        val allowTransitiveImports = schemaSystem.getParam(IonSchemaSystemImpl.Param.ALLOW_TRANSITIVE_IMPORTS)
 
         (header.get("imports") as? IonList)
             ?.filterIsInstance<IonStruct>()
@@ -154,10 +161,14 @@ internal class SchemaImpl private constructor(
 
                     val typeName = (it["type"] as? IonSymbol)?.stringValue()
                     if (typeName != null) {
-                        var newType = importedSchema.getType(typeName)
-                            ?: throw InvalidSchemaException(
-                                "Schema $childImportId doesn't contain a type named '$typeName'"
-                            )
+                        // TODO: Import only if it's declared in that schema (rather than imported from elsewhere)
+                        var newType =
+                            if (allowTransitiveImports)
+                                importedSchema.getType(typeName)
+                            else
+                                importedSchema.getDeclaredType(typeName)
+
+                        newType ?: throw InvalidSchemaException("Schema $childImportId doesn't contain a type named '$typeName'")
 
                         if (alias != null) {
                             newType = TypeAliased(alias, newType as TypeInternal)
@@ -165,7 +176,14 @@ internal class SchemaImpl private constructor(
                         addType(typeMap, newType)
                         schemaAndTypes.addType(alias?.stringValue() ?: typeName, newType)
                     } else {
-                        importedSchema.getTypes().forEach { type ->
+                        // TODO: Import only types declared in that schema (rather than imported from elsewhere)
+                        val typesToAdd =
+                            if (allowTransitiveImports)
+                                importedSchema.getTypes()
+                            else
+                                importedSchema.getDeclaredTypes()
+
+                        typesToAdd.forEach { type ->
                             addType(typeMap, type)
                             schemaAndTypes.addType(type.name, type)
                         }
@@ -182,7 +200,7 @@ internal class SchemaImpl private constructor(
     override fun getImports() = imports.values.iterator()
 
     private fun validateType(type: Type) {
-        if (!schemaSystem.hasParam(IonSchemaSystemImpl.Param.ALLOW_ANONYMOUS_TOP_LEVEL_TYPES)) {
+        if (!schemaSystem.getParam(IonSchemaSystemImpl.Param.ALLOW_ANONYMOUS_TOP_LEVEL_TYPES)) {
             val name = (type.isl as IonStruct)["name"]
             if (name == null || name.isNullValue) {
                 throw InvalidSchemaException(
@@ -204,6 +222,10 @@ internal class SchemaImpl private constructor(
     }
 
     override fun getType(name: String) = schemaCore.getType(name) ?: types[name]
+
+    override fun getDeclaredType(name: String) = declaredTypes[name]
+
+    override fun getDeclaredTypes(): Iterator<Type> = declaredTypes.values.iterator()
 
     override fun getTypes(): Iterator<Type> =
         (schemaCore.getTypes().asSequence() + types.values.asSequence())
