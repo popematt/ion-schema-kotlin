@@ -27,7 +27,7 @@ import com.amazon.ionschema.internal.constraint.ConstraintBase
  */
 internal class TypeInline private constructor (
     ion: IonStruct,
-    private val type: TypeInternal
+    internal val type: TypeInternal
 ) : ConstraintBase(ion), TypeInternal by type {
 
     constructor(ionStruct: IonStruct, schema: Schema) :

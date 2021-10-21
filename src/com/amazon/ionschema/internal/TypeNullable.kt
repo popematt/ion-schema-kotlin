@@ -27,7 +27,7 @@ import com.amazon.ionschema.internal.constraint.ConstraintBase
  */
 internal class TypeNullable(
     ion: IonValue,
-    private val type: TypeInternal,
+    internal val type: TypeInternal,
     schema: Schema
 ) : TypeInternal by type, ConstraintBase(ion) {
 

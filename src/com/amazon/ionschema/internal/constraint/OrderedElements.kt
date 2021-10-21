@@ -36,7 +36,7 @@ internal class OrderedElements(
     private val schema: Schema
 ) : ConstraintBase(ion) {
 
-    private val stateMachine: StateMachine
+    internal val stateMachine: StateMachine
 
     init {
         if (ion !is IonList || ion.isNullValue) {

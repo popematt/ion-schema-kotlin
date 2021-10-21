@@ -120,14 +120,3 @@ class IonSchemaSystemBuilder private constructor() {
         params
     )
 }
-
-class Foo<T>(val bar: Map<String, Any>) {
-    fun getString(key: String): String? = bar[key] as? String
-
-    // Warning: Unchecked cast: Any? to T
-    fun getT(key: String): T? = bar[key] as? T
-
-
-    // Warning: Unchecked cast: Any? to T
-    inline fun <reified U> getU(key: String): U? = bar[key] as? U
-}

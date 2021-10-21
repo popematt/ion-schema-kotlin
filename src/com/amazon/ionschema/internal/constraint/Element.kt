@@ -33,7 +33,7 @@ internal class Element(
     schema: Schema
 ) : ConstraintBase(ion) {
 
-    private val typeReference = TypeReference.create(ion, schema, isField = true)
+    internal val typeReference = TypeReference.create(ion, schema, isField = true)
 
     override fun validate(value: IonValue, issues: Violations) {
         validateAs<IonContainer>(value, issues) { v ->

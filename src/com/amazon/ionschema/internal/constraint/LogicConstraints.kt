@@ -123,7 +123,7 @@ internal class OneOf(ion: IonValue, schema: Schema) : LogicConstraints(ion, sche
  * @see https://amzn.github.io/ion-schema/docs/spec.html#not
  */
 internal class Not(ion: IonValue, schema: Schema) : ConstraintBase(ion) {
-    private val type = TypeReference.create(ion, schema)
+    internal val type = TypeReference.create(ion, schema)
 
     override fun validate(value: IonValue, issues: Violations) {
         val child = Violation(ion, "type_matched", "value unexpectedly matches type")
