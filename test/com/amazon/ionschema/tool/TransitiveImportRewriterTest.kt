@@ -1,14 +1,12 @@
-package com.amazon.ionschema.migrationtool
+package com.amazon.ionschema.tool
 
 import com.amazon.ion.system.IonSystemBuilder
 import com.amazon.ionschema.AuthorityFilesystem
 import com.amazon.ionschema.IonSchemaSystemBuilder
 import com.amazon.ionschema.internal.TypeImpl
-import com.amazon.ionschema.migratortool.fixTransitiveImports
-import com.amazon.ionschema.migratortool.fixTransitiveImports2
 import org.junit.Test
 
-class TransitiveImportFixerTest {
+class TransitiveImportRewriterTest {
 
     val ION = IonSystemBuilder.standard().build()
 
@@ -36,12 +34,14 @@ class TransitiveImportFixerTest {
     }
 
     @Test
-    fun someTest() {
-        ISL.fixTransitiveImports("schema/import/all_import.isl")
+    fun someTest3() {
+        with (TransitiveImportRewriter) {
+            ISL.rewriteImportsForSchema("ion-schema-tests", "schema/import/all_import.isl", debug = true)
+        }
     }
 
     @Test
-    fun someTest2() {
-        ISL.fixTransitiveImports2("schema/import/all_import.isl")
+    fun testCompleteRewriteOfAuthorityDirectory() {
+        TransitiveImportRewriter.fixTransitiveImports("ion-schema-tests")
     }
 }
