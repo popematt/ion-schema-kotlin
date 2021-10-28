@@ -1,9 +1,10 @@
 package com.amazon.ionschema.tool
 
 import com.amazon.ion.IonContainer
+import com.amazon.ion.IonDatagram
+import com.amazon.ion.IonList
+import com.amazon.ion.IonSexp
 import com.amazon.ion.IonStruct
-import com.amazon.ion.IonSymbol
-import com.amazon.ion.IonText
 import com.amazon.ion.IonValue
 import com.amazon.ion.system.IonSystemBuilder
 import com.amazon.ionelement.api.AnyElement
@@ -13,9 +14,13 @@ import com.amazon.ionelement.api.IonElementConstraintException
 import com.amazon.ionelement.api.IonElementLoaderOptions
 import com.amazon.ionelement.api.IonLocation
 import com.amazon.ionelement.api.IonTextLocation
+import com.amazon.ionelement.api.ListElement
+import com.amazon.ionelement.api.SexpElement
 import com.amazon.ionelement.api.StructElement
-import com.amazon.ionelement.api.StructField
-import com.amazon.ionelement.api.field
+import com.amazon.ionelement.api.SymbolElement
+import com.amazon.ionelement.api.TextElement
+import com.amazon.ionelement.api.ionListOf
+import com.amazon.ionelement.api.ionSexpOf
 import com.amazon.ionelement.api.ionString
 import com.amazon.ionelement.api.ionStructOf
 import com.amazon.ionelement.api.ionSymbol
@@ -24,21 +29,19 @@ import com.amazon.ionelement.api.location
 import com.amazon.ionschema.IonSchemaSystem
 import com.amazon.ionschema.internal.IonSchemaSystemImpl
 import com.amazon.ionschema.internal.SchemaCore
-import com.amazon.ionschema.internal.TypeAliased
-import com.amazon.ionschema.internal.TypeImpl
 import com.amazon.ionschema.internal.TypeInternal
-
 import com.amazon.ionelement.api.toIonElement
+import com.amazon.ionelement.api.toIonValue
 import com.amazon.ionschema.AuthorityFilesystem
 import com.amazon.ionschema.IonSchemaSystemBuilder
 import com.amazon.ionschema.Schema
-import com.amazon.ionschema.internal.SchemaImpl
+import com.amazon.ionschema.Type
 import com.amazon.ionschema.internal.TypeBuiltin
 import com.amazon.ionschema.tool.TransitiveImportRewriter.ImportStrategy.*
 import java.io.File
 import java.time.Instant
 import java.time.temporal.ChronoUnit
-import kotlin.system.exitProcess
+import kotlin.Exception
 
 /**
  * TODO:
@@ -49,9 +52,15 @@ import kotlin.system.exitProcess
  */
 object TransitiveImportRewriter {
 
-    // Logic
-    // Walk file system from a base path
-    // Process each schema, and rewrite in a new base-path
+    // Logic:
+    // Pass 1:
+    //    For each authority
+    //       Walk file system from a base path
+    //           Only if it's an aggregating export schema, rewrite it in temp directory, otherwise copy to temp directory
+    // Pass 2:
+    //    For each authority
+    //       Walk file system from a base path
+    //           Rewrite schema in temp directory, otherwise copy to temp directory
     // Read all schemas in the new base path to make sure that they all load correctly
 
     enum class ImportStrategy {
@@ -71,31 +80,84 @@ object TransitiveImportRewriter {
     fun fixTransitiveImports(basePath: String) {
         val newBasePath = basePath + "_rewrite_" + Instant.now().truncatedTo(ChronoUnit.SECONDS)
 
-        rewriteAll(basePath, newBasePath)
+        println("Pass 1: Rewrite aggregating schemas")
+        rewriteAggregatingSchemas(basePath, newBasePath + "_pass1")
 
-        validateAll(newBasePath)
+        println("Pass 2: Rewrite all other schemas")
+        rewriteAll(newBasePath  + "_pass1", newBasePath + "_pass2")
+
+        println("Pass 3: Validate new schemas")
+        val success = validateAll(newBasePath  + "_pass2")
+
+        if (success) {
+            File(newBasePath + "_pass1").deleteRecursively()
+            File(newBasePath + "_pass2").copyRecursively(File(newBasePath))
+            File(newBasePath + "_pass2").deleteRecursively()
+        } else {
+            throw Exception("Rewriter output is invalid.")
+        }
     }
 
-    private fun validateAll(newBasePath: String) {
+
+    private fun walkFileSystemAuthority(basePath: String) = File(basePath).walk()
+        .filter { it.isFile }
+        .filter { it.path.endsWith(".isl") }
+        .map { file -> file.path.substring(basePath.length + 1) to file }
+
+    private inline fun rewriteSchema(file: File, basePath: String, newBasePath: String, transform: (schemaId: String) -> String?) {
+        val schemaId = file.path.substring(basePath.length + 1)
+
+        if (printStatusUpdates) print("Processing $schemaId ...")
+        try {
+            val newSchemaContent = transform(schemaId)
+            val newFile = File("$newBasePath/$schemaId")
+            newFile.parentFile.mkdirs()
+            if (newSchemaContent == null) {
+                file.copyTo(newFile)
+                if (printStatusUpdates) println("NO CHANGE")
+            } else {
+                newFile.createNewFile()
+                newFile.appendText(newSchemaContent)
+                if (printStatusUpdates) println("CHANGE COMPLETE")
+            }
+        } catch (t: Throwable) {
+            if (printStatusUpdates) println("FAILED")
+            else println("$schemaId FAILED")
+            println(t)
+            if (t is IonElementConstraintException) t.printStackTrace()
+        }
+
+    }
+
+
+    private fun validateAll(newBasePath: String): Boolean {
         val ISL = IonSchemaSystemBuilder.standard()
             .withIonSystem(ION)
             .withAuthority(AuthorityFilesystem(newBasePath))
             .build()
 
-        File(newBasePath).walk()
-            .filter { it.isFile }
-            .filter { it.path.endsWith(".isl") }
-            .forEach { file ->
-                val schemaId = file.path.substring(newBasePath.length + 1)
+        var success = true
+        walkFileSystemAuthority(newBasePath).forEach { (schemaId, _) ->
                 if (printStatusUpdates) print("Validating $schemaId ...")
                 runCatching {
                     ISL.loadSchema(schemaId)
                     if (printStatusUpdates) println("PASS")
                 }.onFailure {
+                    success = false
                     if (printStatusUpdates) println("FAIL")
                 }
             }
+        return success
+    }
 
+    private fun rewriteAggregatingSchemas(basePath: String, newBasePath: String) {
+        val ISL = IonSchemaSystemBuilder.standard()
+            .allowTransitiveImports()
+            .withIonSystem(ION)
+            .withAuthority(AuthorityFilesystem(basePath))
+            .build()
+
+        walkFileSystemAuthority(basePath).forEach { (_, file) -> rewriteSchema(file, basePath, newBasePath) { ISL.rewriteAggregatingSchema(it) } }
     }
 
     private fun rewriteAll(basePath: String, newBasePath: String) {
@@ -105,37 +167,39 @@ object TransitiveImportRewriter {
             .withAuthority(AuthorityFilesystem(basePath))
             .build()
 
-        File(basePath).walk()
-            .filter { it.isFile }
-            .filter { it.path.endsWith(".isl") }
-            .forEach { file ->
-                val schemaId = file.path.substring(basePath.length + 1)
-
-                if (printStatusUpdates) print("Rewriting $schemaId ...")
-                try {
-                    val newSchemaContent = ISL.rewriteImportsForSchema(basePath, schemaId)
-                    val newFile = File("$newBasePath/$schemaId")
-                    newFile.parentFile.mkdirs()
-                    if (newSchemaContent == null) {
-                        file.copyTo(newFile)
-                        if (printStatusUpdates) println("NO CHANGE")
-                    } else {
-                        newFile.createNewFile()
-                        newFile.appendText(newSchemaContent)
-                        if (printStatusUpdates) println("CHANGE COMPLETE")
-                    }
-                } catch (t: Throwable) {
-                    if (printStatusUpdates) println("FAILED")
-                    else println("$schemaId FAILED")
-                    println(t)
-                    if (t is IonElementConstraintException) t.printStackTrace()
-                }
-
-            }
+        walkFileSystemAuthority(basePath).forEach { (_, file) -> rewriteSchema(file, basePath, newBasePath) { ISL.rewriteImportsForSchema(basePath, it) } }
     }
 
-    
-    internal fun IonSchemaSystem.rewriteImportsForSchema(basePath: String, schemaId: String, debug: Boolean = false): String? {
+    internal fun IonSchemaSystem.rewriteAggregatingSchema(schemaId: String): String? {
+        this as IonSchemaSystemImpl
+
+        val schema = this.loadSchema(schemaId)
+
+        return if (isExportOnlySchema(schema)) {
+            val preamble = """
+                // Schema '${schemaId}'
+                // 
+                // The purpose of this schema is to decouple consumers of the schema from the implementation details (ie. specific locations)
+                // of each type that it provides, and to indicate to consumers, which types they SHOULD use. Consumers of this type CAN bypass
+                // this schema and import other types directly, but they SHOULD NOT without having a really, really good reason to do so.
+                // 
+                // Essentially, this schema declares types that are intended for public consumption.
+                // 
+                // Consumers of this schema should not bypass this schema unless directed to do so by the owner(s)/author(s) of this schema.
+                // 
+                // The type
+                //     type::{name:foobar,type:{id:"bar.isl",type:foo}}
+                // is analogous to ecmascript
+                //     export { foo as foobar } from 'bar.isl'
+                // 
+            """.trimIndent()
+            preamble + "\n" + writeExports(schema).joinToString("\n") { it.toString() } + "\n"
+        } else {
+            null
+        }
+    }
+
+    internal fun IonSchemaSystem.rewriteImportsForSchema(basePath: String, schemaId: String): String? {
         this as IonSchemaSystemImpl
 
         val schema = this.loadSchema(schemaId)
@@ -161,85 +225,19 @@ object TransitiveImportRewriter {
             return preamble + "\n" + writeExports(schema).joinToString("\n") { it.toString() } + "\n"
         }
 
-        val core = SchemaCore(this)
-
-        // find all type references in the schema
-        val allTypeReferences = schema.isl
-            .filter { it.hasTypeAnnotation("type") }
-            .flatMap { findNamedTypeReferences(it) }
-
-        val inlineImports = allTypeReferences.filter { it.isInlineImport() }.map { it.toIonElement().asStruct() }
-
-        val namedImportedTypes = allTypeReferences.filterIsInstance<IonText>()
-            .filter { schema.getDeclaredType(it.stringValue()) == null }
-            .filter { core.getDeclaredType(it.stringValue()) == null }
-
         val headerImports: List<StructElement> = schema.isl
             .singleOrNull { it.hasTypeAnnotation("schema_header") }?.toIonElement()
             ?.asStruct()?.getOptional("imports")?.asList()?.values?.map { it.asStruct() }
             ?: emptyList()
 
-        // If no header and no inline imports, do nothing?
-        if (headerImports.isEmpty() && inlineImports.isEmpty()) {
+        val newHeaderImports = calculateNewHeaderImports(schema)
+
+        val oldInlineImportsToNewInlineImportsMap = calculateNewInlineImportMapping(schema)
+
+        // If no header and no changes to inline imports, do nothing?
+        if (headerImports.isEmpty() && oldInlineImportsToNewInlineImportsMap.isEmpty()) {
             return null
         }
-
-        if (debug) println("Schema: $schemaId")
-        if (debug) println("Header Imports:\n    ${headerImports.joinToString(",\n    ")}")
-        if (debug) println("Inline Imports:\n    ${inlineImports.joinToString(",\n    ")}")
-        if (debug) println("Named References: $namedImportedTypes")
-
-        val actualImportedTypes = namedImportedTypes.distinctBy { it.stringValue() }
-            .map { schema.getType(it.stringValue()) }
-            .map {
-                when (it) {
-                    is TypeAliased -> ionStructOf(
-                        "id" to ionString(it.type.schemaId!!),
-                        "type" to ionSymbol(it.type.name),
-                        "as" to ionSymbol(it.name)
-                    )
-                    is TypeImpl -> ionStructOf(
-                        "id" to ionString(it.schemaId!!),
-                        "type" to ionSymbol(it.name)
-                    )
-                    else -> TODO("Should not be reachable")
-                }
-            }
-            .sortedBy { it["id"].textValue }
-
-        val newImports = reconcileHeaderImports(headerImports, actualImportedTypes)
-
-        if (debug) println("New Header Imports:\n    ${newImports.joinToString(",\n    ")}")
-
-
-        val inlineImportMap = inlineImports.associate {
-                val importedSchemaId = it["id"].textValue
-                val importedTypeName = it["type"].textValue
-                val importedSchema = loadSchema(importedSchemaId)
-                val importedType = importedSchema.getType(importedTypeName) as TypeInternal
-
-                when (importedType) {
-                    is TypeImpl -> it to ionStructOf(
-                        // Note on the !! -- since the type is imported, then we know it must have a non-null schema id.
-                        "id" to ionString(importedType.schemaId!!),
-                        "type" to ionSymbol(importedType.name)
-                    )
-                    is TypeAliased -> {
-                        it to ionStructOf(
-                            // Note on the !! -- since the type is imported, then we know it must have a non-null schema id.
-                            "id" to ionString(importedType.type.schemaId!!),
-                            "type" to ionSymbol(importedType.type.name)
-                        )
-                    }
-                    else -> TODO("This should be unreachable")
-                }
-            }
-            .filter { (k, v) -> k isEquivalentImportTo v }
-
-        if (debug) println("Inline Imports Map:\n${inlineImportMap.entries.joinToString("\n") { (k, v) -> "    $k => $v" }}")
-
-
-
 
         val schemaIslString = File("$basePath/$schemaId").readText(Charsets.UTF_8)
 
@@ -254,18 +252,15 @@ object TransitiveImportRewriter {
 
         val schemaTextReplacements = mutableListOf<Pair<IntRange, String>>()
 
-        if (newImports != headerImports) {
+        if (newHeaderImports != headerImports) {
             schemaIonElements.singleOrNull { "schema_header" in it.annotations }
                 ?.let {
                     val imports = it.asStruct().getOptional("imports")?.asList() ?: return@let
                     if (imports.values.isEmpty()) return@let
 
-                    if (newImports.isEmpty()) {
-                        // TODO: Just delete all imports
-                        // Get key locations
+                    if (newHeaderImports.isEmpty()) {
                         val importListStartLocation = schemaIslString.indexOf('[', startIndex = imports.metas.location.toIndex())
                         val importListEndLocation = schemaIslString.indexOf(']', startIndex = imports.values.last().metas.location.toIndex())
-
                         schemaTextReplacements.add(importListStartLocation..importListEndLocation to "[]")
                     } else {
                         // Get key locations
@@ -278,7 +273,7 @@ object TransitiveImportRewriter {
                         val importDelimitingWhitespace = schemaIslString.substring(startOfFirstImportLine until firstImportStartLocation)
 
                         val replacementLocation = firstImportStartLocation..lastImportEndLocation
-                        val replacementText = newImports.joinToString(separator = ",$importDelimitingWhitespace")
+                        val replacementText = newHeaderImports.joinToString(separator = ",$importDelimitingWhitespace")
 
                         schemaTextReplacements.add(replacementLocation to replacementText)
                     }
@@ -286,10 +281,10 @@ object TransitiveImportRewriter {
         }
 
         val inlineImportFindingVisitor = visitor@ { it: AnyElement ->
-        if (it is StructElement && inlineImportMap.containsKey(it) && inlineImportMap[it] != it) {
+            if (it is StructElement && oldInlineImportsToNewInlineImportsMap.containsKey(it) && oldInlineImportsToNewInlineImportsMap[it] != it) {
                 val start = schemaIslString.indexOf('{', startIndex = it.metas.location.toIndex())
                 val end = schemaIslString.indexOf("}", startIndex = start)
-                val replacementText = inlineImportMap[it].toString()
+                val replacementText = oldInlineImportsToNewInlineImportsMap[it].toString()
                 schemaTextReplacements.add(start..end to replacementText)
             }
         }
@@ -298,46 +293,132 @@ object TransitiveImportRewriter {
 
         if (schemaTextReplacements.isEmpty()) return null
 
-        if (debug) println(schemaTextReplacements.joinToString(separator = "\n"))
+        val newIslString = applyStringReplacements(schemaIslString, schemaTextReplacements)
 
-        val newIslString = applyReplacements(schemaIslString, schemaTextReplacements)
-
-        if (debug) println(newIslString)
-        
         return newIslString
     }
 
-    private fun isExportOnlySchema(schema: Schema): Boolean {
-        return schema.getDeclaredTypes().asSequence().toList().isEmpty()
+    internal fun IonSchemaSystem.rewriteSchemaIsl(basePath: String, schemaId: String): IonValue {
+        this as IonSchemaSystemImpl
+
+        val schema = this.loadSchema(schemaId)
+
+        if (isExportOnlySchema(schema)) {
+            return writeExports(schema).mapTo(getIonSystem().newDatagram()) { it.toIonValue(getIonSystem()) }
+        }
+
+        val headerImports: IonElement? = schema.isl
+            .singleOrNull { it.hasTypeAnnotation("schema_header") }?.toIonElement()
+            ?.asStruct()?.getOptional("imports")
+
+        val replacements: Map<out IonElement, IonElement> = calculateNewInlineImportMapping(schema)
+            .let {
+                if (headerImports != null && headerImports.asAnyElement().asList().values.isNotEmpty()) {
+                    it + (headerImports to ionListOf(calculateNewHeaderImports(schema)))
+                } else {
+                    it
+                }
+            }
+
+        return if (replacements.isEmpty()) {
+            schema.isl
+        } else {
+            schema.isl.asSequence().map { it.toIonElement() }
+                .map { it.recursivelyTransform(PreOrder) { replacements[it] ?: it } }
+                .mapTo(getIonSystem().newDatagram()) { it.asAnyElement().toIonValue(getIonSystem()) }
+        }
     }
 
-    private fun writeExports(schema: Schema): List<IonElement> {
+    private fun IonSchemaSystem.calculateNewHeaderImports(schema: Schema): List<StructElement> {
+        this as IonSchemaSystemImpl
+
+        val headerImports: List<StructElement> = schema.isl
+            .singleOrNull { it.hasTypeAnnotation("schema_header") }?.toIonElement()
+            ?.asStruct()?.getOptional("imports")?.asList()?.values?.map { it.asStruct() }
+            ?: emptyList()
+
+        if (headerImports.isEmpty()) {
+            return emptyList()
+        }
+
+        val core = SchemaCore(this)
+
+        // find all type references in the schema
+        val actualImportedTypes = schema.isl
+            .filter { it.hasTypeAnnotation("type") }
+            .flatMap { findTypeReferences(it.toIonElement()) }
+            .asSequence()
+            .filterIsInstance<TextElement>()
+            .distinctBy { it.textValue }
+            .filter { schema.getDeclaredType(it.textValue) == null }
+            .filter { core.getDeclaredType(it.textValue) == null }
+            .map { schema.getType(it.textValue) }
+            .map { writeImportToIsl(it!!) }
+            .toList()
+
+        return reconcileHeaderImports(headerImports, actualImportedTypes)
+    }
+
+    private fun IonSchemaSystem.calculateNewInlineImportMapping(schema: Schema): Map<StructElement, StructElement> {
+        return schema.isl
+            .filter { it.hasTypeAnnotation("type") }
+            .flatMap { findTypeReferences(it.toIonElement()) }
+            .filterIsInstance<StructElement>() // Inline imports are structs, all other references are symbols
+            .associateWith { writeImportToIsl(loadSchema(it["id"].textValue).getType(it["type"].textValue)!!) }
+            .filter { (k, v) -> k isEquivalentImportTo v } // remove any identity transforms
+    }
+
+    private fun writeImportToIsl(type: Type): StructElement {
+        val alias = type.name
+        val name = type.isl.toIonElement().asStruct()["name"].textValue
+        val importedFromSchemaId = (type as TypeInternal).schemaId!!
+        return if (alias != name) {
+            ionStructOf(
+                "id" to ionString(importedFromSchemaId),
+                "type" to ionSymbol(name),
+                "as" to ionSymbol(alias)
+            )
+        } else {
+            ionStructOf(
+                "id" to ionString(importedFromSchemaId),
+                "type" to ionSymbol(name)
+            )
+        }
+    }
+
+    /**
+     * Has at least one import, and has no declared types
+     */
+    private fun isExportOnlySchema(schema: Schema): Boolean {
+        return schema.getDeclaredTypes().asSequence().toList().isEmpty()
+            && schema.getImports().hasNext()
+    }
+
+    private fun writeExports(schema: Schema): List<AnyElement> {
         return schema.getTypes().asSequence()
             .filterIsInstance<TypeInternal>()
             .filter { it !is TypeBuiltin && it.schemaId != null }
             .map {
+                val alias = it.name
+                val name = it.isl.toIonElement().asStruct()["name"].textValue
+                val importedFromSchemaId = it.schemaId!!
                 ionStructOf(
-                    "name" to ionSymbol(it.name),
-                    "type" to when (it) {
-                        is TypeAliased -> ionStructOf(
-                            "id" to ionString(it.type.schemaId!!),
-                            "type" to ionSymbol(it.type.name)
-                        )
-                        is TypeImpl -> ionStructOf(
-                            "id" to ionString(it.schemaId!!),
-                            "type" to ionSymbol(it.name)
-                        )
-                        else -> TODO("Should not be reachable")
-                    },
+                    // alias and name could be the same value if there was no import alias
+                    // in which case it is being re-exported as the same name.
+                    "name" to ionSymbol(alias),
+                    "type" to ionStructOf(
+                        "id" to ionString(importedFromSchemaId),
+                        "type" to ionSymbol(name)
+                    ),
                     annotations = listOf("type")
                 )
             }
             .toList()
             .sortedBy { it["name"].textValue }
+            .map { it.asAnyElement() }
     }
 
-
-    private fun applyReplacements(original: String, replacements: List<Pair<IntRange, String>>): String {
+    private fun applyStringReplacements(original: String, replacements: List<Pair<IntRange, String>>): String {
         var startOfRangeToKeep = 0
         return with(StringBuilder()) {
             replacements
@@ -352,29 +433,27 @@ object TransitiveImportRewriter {
         }
     }
 
-
-    fun findNamedTypeReferences(ionValue: IonValue): List<IonValue> {
-        return if (ionValue is IonStruct) {
-            ionValue.flatMap {
-                when (it.fieldName) {
-                    "type",
-                    "not",
-                    "element" -> listOf(it)
-                    "one_of",
-                    "any_of",
-                    "all_of",
-                    "ordered_elements",
-                    "fields" -> it as IonContainer
-                    else -> emptyList<IonValue>()
+    fun findTypeReferences(ionElement: IonElement): List<AnyElement> {
+        ionElement as AnyElement
+        return when {
+            ionElement.isInlineImport() -> listOf(ionElement)
+            ionElement is SymbolElement -> listOf(ionElement)
+            ionElement is StructElement -> {
+                ionElement.fields.flatMap {
+                    when (it.name) {
+                        "type",
+                        "not",
+                        "element" -> findTypeReferences(it.value)
+                        "one_of",
+                        "any_of",
+                        "all_of",
+                        "ordered_elements",
+                        "fields" -> it.value.containerValues.flatMap { findTypeReferences(it) }
+                        else -> emptyList()
+                    }
                 }
-            }.flatMap {
-                if (it is IonSymbol || it.isInlineImport())
-                    listOf(it)
-                else
-                    findNamedTypeReferences(it)
             }
-        } else {
-            emptyList()
+            else -> emptyList()
         }
     }
 
@@ -438,7 +517,6 @@ object TransitiveImportRewriter {
         this is StructElement && this.fields.map { it.name }
             .let { fieldNames -> "id" in fieldNames && "type" in fieldNames }
 
-
     private interface TraversalOrder
     private object PreOrder: TraversalOrder
     private object PostOrder: TraversalOrder
@@ -449,5 +527,18 @@ object TransitiveImportRewriter {
             if (this is ContainerElement) asContainerOrNull()?.values?.forEach { child -> child.recursivelyVisit(order, visitor) }
             if (order is PostOrder) visitor(this)
         }
+    }
+
+    private fun IonElement.recursivelyTransform(order: TraversalOrder, transform: (AnyElement) -> IonElement): IonElement {
+        var result = this as AnyElement
+        result = if (order is PreOrder) transform(result).asAnyElement() else result
+        result = when (result) {
+            is ListElement -> result.values.map { child -> child.recursivelyTransform(order, transform) }.let { ionListOf(it, result.annotations, result.metas) }
+            is SexpElement -> result.values.map { child -> child.recursivelyTransform(order, transform) }.let { ionSexpOf(it, result.annotations, result.metas) }
+            is StructElement -> result.values.map { child -> child.recursivelyTransform(order, transform) }.let { ionListOf(it, result.annotations, result.metas) }
+            else -> result
+        }.asAnyElement()
+        result = if (order is PostOrder) transform(result).asAnyElement() else result
+        return result
     }
 }

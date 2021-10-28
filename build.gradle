@@ -43,6 +43,7 @@ repositories {
 
 dependencies {
   api "com.amazon.ion:ion-java:[1.4,)"
+  implementation "com.amazon.ion:ion-element:[0.2,)"
   implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
   testImplementation "org.jetbrains.kotlin:kotlin-test-junit:$kotlin_version"
 }

@@ -36,7 +36,7 @@ class TransitiveImportRewriterTest {
     @Test
     fun someTest3() {
         with (TransitiveImportRewriter) {
-            ISL.rewriteImportsForSchema("ion-schema-tests", "schema/import/all_import.isl", debug = true)
+            ISL.rewriteImportsForSchema("ion-schema-tests", "schema/import/all_import.isl")
         }
     }
 
