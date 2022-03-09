@@ -36,6 +36,10 @@ internal class IonSchemaSystemImpl(
 ) : IonSchemaSystem {
 
     private val schemaCore = SchemaCore(this)
+
+    override val builtInTypesSchema
+        get(): Schema = schemaCore
+
     // Set to be used to detect cycle in import dependencies
     private val schemaImportSet: MutableSet<String> = mutableSetOf<String>()
 

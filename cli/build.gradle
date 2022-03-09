@@ -28,6 +28,7 @@ dependencies {
     implementation project(':ion-schema-kotlin')
     implementation "com.amazon.ion:ion-java:[1.4,)"
     implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+    implementation "com.amazon.ion:ion-element:[0.2.0,)"
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
     implementation "com.github.ajalt.clikt:clikt:3.2.0"
     testImplementation "org.jetbrains.kotlin:kotlin-test-junit:$kotlin_version"

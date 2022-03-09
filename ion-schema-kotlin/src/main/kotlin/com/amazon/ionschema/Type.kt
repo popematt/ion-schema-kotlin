@@ -30,6 +30,8 @@ interface Type {
      */
     val name: String
 
+    val schemaId: String?
+
     /**
      * A read-only view of the ISL for this type.
      */

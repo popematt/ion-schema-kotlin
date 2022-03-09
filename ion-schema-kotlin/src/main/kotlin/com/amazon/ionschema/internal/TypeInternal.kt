@@ -26,7 +26,7 @@ internal interface TypeInternal : Type, Constraint {
     /**
      * The name of the schemaId that this type was defined in.
      */
-    val schemaId: String?
+    override val schemaId: String?
 
     fun getBaseType(): TypeBuiltin
 
@@ -52,5 +52,5 @@ internal interface ImportedType : TypeInternal {
  *
  * Even though it is not part of the public API, it is convenient to have [schemaId] available on [Type] internally.
  */
-internal val Type.schemaId: String?
-    get() = (this as? TypeInternal)?.schemaId
+//internal val Type.schemaId: String?
+//    get() = (this as? TypeInternal)?.schemaId
