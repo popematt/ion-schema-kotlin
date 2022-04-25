@@ -1,6 +1,5 @@
 package com.amazon.ionschema.cli.commands
 
-import com.amazon.ionschema.cli.TransitiveImportRewriter
 import com.amazon.ionschema.cli.TransitiveImportRewriter2
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.NoOpCliktCommand
@@ -19,16 +18,13 @@ class FixSchemasCommand : NoOpCliktCommand(
         }
     }
 
-
-
-
-    private class TransitiveImportsCommand: CliktCommand(
+    private class TransitiveImportsCommand : CliktCommand(
         help = "Fixes schemas that are affected by the transitive import issue. See https://github.com/amzn/ion-schema/issues/39",
         epilog = """
         ```
         Example usage:   
         ```
-    """.trimIndent()
+        """.trimIndent()
     ) {
         val basePath by argument()
 

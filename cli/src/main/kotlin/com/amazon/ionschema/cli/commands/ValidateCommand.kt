@@ -48,7 +48,6 @@ class ValidateCommand : CliktCommand(
         "none" to AuthorityConfig.None
     ).defaultByName("none")
 
-
     val schema by option("-s", "--schema")
 
     val type by option("-t", "--type", help = "An ISL type reference.").required().check {
