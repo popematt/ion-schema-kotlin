@@ -35,15 +35,15 @@ fun findTypeReferences(ionElement: IonElement): List<AnyElement> {
 }
 
 infix fun StructElement.includesTypeImport(other: StructElement): Boolean {
-    return this["id"].textValue == other["id"].textValue
-        && (this.getOptional("type") ?: other["type"]).textValue == other["type"].textValue
-        && this.getOptional("as")?.textValue == other.getOptional("as")?.textValue
+    return this["id"].textValue == other["id"].textValue &&
+        (this.getOptional("type") ?: other["type"]).textValue == other["type"].textValue &&
+        this.getOptional("as")?.textValue == other.getOptional("as")?.textValue
 }
 
 infix fun StructElement.isEquivalentImportTo(other: StructElement): Boolean {
-    return this["id"].textValue == other["id"].textValue
-        && this.getOptional("type")?.textValue == other.getOptional("type")?.textValue
-        && this.getOptional("as")?.textValue == other.getOptional("as")?.textValue
+    return this["id"].textValue == other["id"].textValue &&
+        this.getOptional("type")?.textValue == other.getOptional("type")?.textValue &&
+        this.getOptional("as")?.textValue == other.getOptional("as")?.textValue
 }
 
 fun IonElement.isInlineImport(): Boolean =

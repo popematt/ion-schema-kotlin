@@ -13,9 +13,9 @@ import com.amazon.ionelement.api.ionStructOf
 import com.amazon.ionelement.api.ionSymbol
 import com.amazon.ionelement.api.loadAllElements
 import com.amazon.ionelement.api.location
-import com.amazon.ionschema.IonSchemaSystem
 import com.amazon.ionelement.api.toIonElement
 import com.amazon.ionschema.AuthorityFilesystem
+import com.amazon.ionschema.IonSchemaSystem
 import com.amazon.ionschema.IonSchemaSystemBuilder
 import com.amazon.ionschema.Schema
 import java.io.File
@@ -55,17 +55,18 @@ object TransitiveImportRewriter2 {
 
         println("Pass 1: Rewrite aggregating schemas")
         rewriteSchemasForFileSystemAuthority(basePath, newBasePath + "_pass1") {
-            iss, it -> iss.rewriteAggregatingSchema(it)
+            iss, it ->
+            iss.rewriteAggregatingSchema(it)
         }
 
         println("Pass 2: Rewrite all other schemas")
-        rewriteSchemasForFileSystemAuthority(newBasePath  + "_pass1", newBasePath + "_pass2") {
-                iss, it -> iss.rewriteStandardSchema(it)
+        rewriteSchemasForFileSystemAuthority(newBasePath + "_pass1", newBasePath + "_pass2") {
+            iss, it ->
+            iss.rewriteStandardSchema(it)
         }
 
-
         println("Pass 3: Validate new schemas")
-        val success = validateAll(newBasePath  + "_pass2")
+        val success = validateAll(newBasePath + "_pass2")
 
         if (success) {
             File(newBasePath + "_pass2").copyRecursively(File(newBasePath))
@@ -94,7 +95,6 @@ object TransitiveImportRewriter2 {
         .filter { it.isFile }
         .filter { it.path.endsWith(".isl") }
         .map { file -> file.path.substring(basePath.length + 1) to file }
-
 
     private fun validateAll(basePath: String, withTransitiveImports: Boolean = false): Boolean {
         val iss = IonSchemaSystemBuilder.standard()
@@ -145,7 +145,8 @@ object TransitiveImportRewriter2 {
             .sortedBy { it["name"].textValue }
             .joinToString("\n")
 
-        schemaPatcher.replaceAll("""
+        schemaPatcher.replaceAll(
+            """
             |// Schema '${schemaPatcher.schemaId}'
             |// 
             |// This schema declares types that are intended for public consumption.
@@ -165,7 +166,8 @@ object TransitiveImportRewriter2 {
             |
             |$exports
             |
-            """.trimMargin())
+            """.trimMargin()
+        )
     }
 
     private fun IonSchemaSystem.rewriteStandardSchema(schemaPatcher: SchemaPatcher) {
@@ -193,7 +195,6 @@ object TransitiveImportRewriter2 {
         val schemaIslString = schemaPatcher.original
 
         val schemaIonElements = loadAllElements(schemaIslString, IonElementLoaderOptions(includeLocationMeta = true))
-
 
         val newlineLocations = schemaIslString.mapIndexedNotNull { i, c -> if (c == '\n') i else null }
         val lineStartLocations = (listOf(0) + newlineLocations.map { it + 1 })
@@ -279,8 +280,8 @@ object TransitiveImportRewriter2 {
      * Has at least one import, and has no declared types
      */
     private fun isExportOnlySchema(schema: Schema): Boolean {
-        return schema.getDeclaredTypes().asSequence().toList().isEmpty()
-            && schema.getImports().hasNext()
+        return schema.getDeclaredTypes().asSequence().toList().isEmpty() &&
+            schema.getImports().hasNext()
     }
 
     private fun reconcileHeaderImports(headerImports: List<StructElement>, actualImportedTypes: List<StructElement>): List<StructElement> {
