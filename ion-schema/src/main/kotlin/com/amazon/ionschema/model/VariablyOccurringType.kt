@@ -14,14 +14,18 @@
  */
 package com.amazon.ionschema.model
 
-import com.amazon.ionelement.api.IonElement
+import com.amazon.ionschema.model.codegen.Builder
 
 /**
- * Represents the footer of a schema document.
+ * Represents a type that has an `occurs` value. Note that this includes even
+ * implicit `occurs`, such as in this example:
+ * ```
+ * type::{
+ *   fields: {
+ *     foo: string  // this `string` has an implicit `occurs: optional`
+ *   }
+ * }
+ * ```
  */
-data class AstFooter(val additionalContent: Map<String, List<IonElement>> = emptyMap()) {
-    companion object {
-        @JvmField
-        val EMPTY = AstFooter()
-    }
-}
+@Builder
+data class VariablyOccurringType(val occurs: DiscreteRange, val type: Type)

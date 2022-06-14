@@ -1,3 +1,6 @@
 rootProject.name = 'ion-schema-kotlin'
 include 'ion-schema'
 include 'cli'
+include 'builder-annotation'
+include 'builder-annotation-processor'
+include 'builder-ksp'

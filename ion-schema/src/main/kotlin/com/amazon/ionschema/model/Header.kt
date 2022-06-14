@@ -14,16 +14,18 @@
  */
 package com.amazon.ionschema.model
 
-import com.amazon.ionelement.api.IonElement
+import com.amazon.ionelement.api.StructField
+import com.amazon.ionschema.model.codegen.Builder
 
 /**
  * Represents the header of a schema document.
  */
-data class AstHeader(val imports: List<Import>, val additionalContent: Map<String, List<IonElement>> = emptyMap()) {
+@Builder
+data class Header(val imports: List<Import>, @Builder.Default("emptyList()") val userContent: List<StructField> = emptyList()) {
 
     companion object {
         @JvmField
-        val EMPTY = AstHeader(emptyList())
+        val EMPTY = Header(emptyList())
     }
 
     sealed class Import {

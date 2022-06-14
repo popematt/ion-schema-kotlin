@@ -19,39 +19,39 @@ import com.amazon.ionelement.api.IonElement
 import com.amazon.ionschema.model.constraints.ByteLengthConstraint
 import com.amazon.ionschema.model.constraints.ContainsConstraint
 
-class ConstraintValidatorMediator(registrations: List<ConstraintValidatorRegistration<*>>) : ConstraintMediator<ConstraintValidatorRegistration<*>>(registrations) {
-    private operator fun <C : AstConstraint<C>> get(id: ConstraintId<C>): ConstraintValidatorRegistration<C> {
-        return super._get(id) as ConstraintValidatorRegistration<C>
-    }
+class ConstraintValidatorMediator private constructor(delegate: ConstraintMediatorDelegate<ConstraintValidatorRegistration<*>>) : ConstraintMediator<ConstraintValidatorRegistration<*>> by delegate {
+    constructor(registrations: List<ConstraintValidatorRegistration<*>>) : this(ConstraintMediatorDelegate<ConstraintValidatorRegistration<*>>(registrations))
 
     /**
      * Validates an IonElement against a single constraint
      */
-    inline fun <reified T : AstConstraint<T>> validateConstraint(constraint: AstConstraint<T>, data: IonElement): Boolean {
+    inline fun <reified T : Constraint<T>> validateConstraint(constraint: Constraint<T>, data: IonElement): Boolean {
         return validateConstraint(constraint as T, data.asAnyElement())
     }
 
-    fun <T : AstConstraint<T>> validateConstraint(constraint: T, data: AnyElement): Boolean =
-        this[constraint.id].validate(constraint, data)
+    fun <T : Constraint<T>> validateConstraint(constraint: T, data: AnyElement): Boolean {
+        val registration: ConstraintValidatorRegistration<T> = get(constraint.id)
+        return registration.validate(constraint, data)
+    }
 }
 
-class ConstraintValidatorRegistration<T : AstConstraint<T>>(
+class ConstraintValidatorRegistration<T : Constraint<T>>(
     override val id: ConstraintId<T>,
     val validate: (T, AnyElement) -> Boolean
-) : ConstraintMediator.Registration<T>
+) : Registration<ConstraintValidatorRegistration<T>, T>
 
-infix fun <T : AstConstraint<T>> ConstraintId<T>.uses(validate: (T, AnyElement) -> Boolean) =
-    ConstraintValidatorRegistration(this, validate)
+fun <T : Constraint<T>> validator(id: ConstraintId<T>, validate: (T, AnyElement) -> Boolean) =
+    ConstraintValidatorRegistration(id, validate)
 
 val validators = ConstraintValidatorMediator(
     listOf(
-        ByteLengthConstraint uses { constraint, data -> data.bytesValue.size() in constraint.range },
-        ContainsConstraint uses { constraint, data -> data.containerValues.containsAll(constraint.values) }
+        ConstraintValidatorRegistration(ByteLengthConstraint.ID) { constraint, data -> data.bytesValue.size() in constraint.range },
+        ConstraintValidatorRegistration(ContainsConstraint.ID) { constraint, data -> data.containerValues.containsAll(constraint.values) }
     )
 )
 
 // Example of how the ConstraintMediator can be used to validate data against an AST type.
-fun validateType(type: AstType.TypeDefinition, data: IonElement, mediator: ConstraintValidatorMediator): Boolean {
+fun validateType(type: Type.Definition, data: IonElement, mediator: ConstraintValidatorMediator): Boolean {
     // Note that for simplicity, this example uses a boolean return instead of collecting violations.
     return type.constraints.all { mediator.validateConstraint(it, data.asAnyElement()) }
 }

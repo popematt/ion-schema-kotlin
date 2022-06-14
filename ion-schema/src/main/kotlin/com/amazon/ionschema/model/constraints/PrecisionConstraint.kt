@@ -16,10 +16,12 @@ package com.amazon.ionschema.model.constraints
 
 import com.amazon.ionschema.model.ConstraintId
 import com.amazon.ionschema.model.DiscreteRange
+import com.amazon.ionschema.model.codegen.Builder
 
+@Builder
 data class PrecisionConstraint(override val range: DiscreteRange) : DiscreteRangeConstraint<PrecisionConstraint> {
-    companion object : ConstraintId<PrecisionConstraint> by ConstraintId("precision") {
-        @JvmField val ID = this@Companion
+    companion object {
+        @JvmField val ID = ConstraintId<PrecisionConstraint>("precision")
     }
     override val id get() = ID
 }

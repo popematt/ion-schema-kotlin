@@ -14,14 +14,17 @@
  */
 package com.amazon.ionschema.model.constraints
 
-import com.amazon.ionschema.model.AstConstraint
+import com.amazon.ionschema.model.Constraint
 import com.amazon.ionschema.model.ConstraintId
+import com.amazon.ionschema.model.codegen.Builder
 
-data class TimestampOffsetConstraint(val offset: Offset) : AstConstraint<TimestampOffsetConstraint> {
-    companion object : ConstraintId<TimestampOffsetConstraint> by ConstraintId("timestamp_offset") {
-        @JvmField val ID = this@Companion
+@Builder
+data class TimestampOffsetConstraint(val offset: Offset) : Constraint<TimestampOffsetConstraint> {
+    companion object {
+        @JvmField val ID = ConstraintId<TimestampOffsetConstraint>("timestamp_offset")
     }
     override val id get() = ID
+
     sealed class Offset {
         object Unknown : Offset()
         data class Minutes(val minutes: Int) : Offset()

@@ -14,12 +14,14 @@
  */
 package com.amazon.ionschema.model.constraints
 
-import com.amazon.ionschema.model.AstType
 import com.amazon.ionschema.model.ConstraintId
+import com.amazon.ionschema.model.Type
+import com.amazon.ionschema.model.codegen.Builder
 
-data class AllOfConstraint(override val types: Iterable<AstType>) : NAryTypeConstraint<AllOfConstraint> {
-    companion object : ConstraintId<AllOfConstraint> by ConstraintId("all_of") {
-        @JvmField val ID = this@Companion
+@Builder
+data class AllOfConstraint(override val types: Iterable<Type>) : NAryTypeConstraint<AllOfConstraint> {
+    companion object {
+        @JvmField val ID = ConstraintId<AllOfConstraint>("all_of")
     }
     override val id get() = ID
 }

@@ -14,11 +14,18 @@
  */
 package com.amazon.ionschema.model.constraints
 
-import com.amazon.ionschema.model.*
+import com.amazon.ionschema.model.Constraint
+import com.amazon.ionschema.model.ConstraintId
+import com.amazon.ionschema.model.Max
+import com.amazon.ionschema.model.Min
+import com.amazon.ionschema.model.Range
+import com.amazon.ionschema.model.RangeDelegate
+import com.amazon.ionschema.model.codegen.Builder
 
-data class TimestampPrecisionConstraint(val range: TimestampPrecisionRange) : AstConstraint<TimestampPrecisionConstraint> {
-    companion object : ConstraintId<TimestampPrecisionConstraint> by ConstraintId("timestamp_precision") {
-        @JvmField val ID = this@Companion
+@Builder
+data class TimestampPrecisionConstraint(val range: TimestampPrecisionRange) : Constraint<TimestampPrecisionConstraint> {
+    companion object {
+        @JvmField val ID = ConstraintId<TimestampPrecisionConstraint>("timestamp_precision")
     }
     override val id get() = ID
 }

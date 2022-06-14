@@ -14,30 +14,36 @@
  */
 package com.amazon.ionschema.model
 
-import com.amazon.ionelement.api.*
+import com.amazon.ionelement.api.StructField
+import com.amazon.ionschema.model.codegen.Builder
 
-sealed class AstType {
+sealed class Type {
 
     /**
      * Represents a named reference to another type. If the [typeId] exists in the scope of the enclosing type (i.e. the
      * type was imported in the header, declared elsewhere in the same schema document, or is a built-in type), then
      * [schemaId] can be null. For inline imports, [schemaId] must not be null.
      */
-    data class TypeReference @JvmOverloads constructor(val typeId: String, val schemaId: String? = null) : AstType()
+    @Builder
+    data class Reference @JvmOverloads constructor(val typeId: String, val schemaId: String? = null) : Type()
 
     /**
      * Represents a type as defined by a set of constraints, with optional user-provided content (i.e. "open content").
      */
-    data class TypeDefinition @JvmOverloads constructor(
-        val constraints: Collection<AstConstraint<*>>,
-        val userContent: List<Pair<String, IonElement>> = emptyList()
-    ) : AstType()
+    // Can't generate a builder for this class because resolving the KSP type reference for Collection<Constraint<*>>
+    // causes infinite recursion in KotlinPoet/KSP
+    //@GeneratedBuilder
+    data class Definition @JvmOverloads constructor(
+        val constraints: Collection<Constraint<*>>,
+        // @Builder.Default("emptyList()")
+        val userContent: List<StructField> = emptyList()
+    ) : Type()
 }
 
 /**
  * Gets all instances of a particular constraint, cast to the correct type for the given [constraintId].
  */
-operator fun <T : AstConstraint<T>> AstType.TypeDefinition.get(constraintId: ConstraintId<T>): List<T> {
+operator fun <T : Constraint<T>> Type.Definition.get(constraintId: ConstraintId<T>): List<T> {
     // Compiler thinks that this is an unchecked cast, but we know it's safe because the type bound of AstConstraint
     // and ConstraintId must be the same, and we've already verified that the ID matches.
     return constraints.filter { it.id == constraintId }.map { it as T }

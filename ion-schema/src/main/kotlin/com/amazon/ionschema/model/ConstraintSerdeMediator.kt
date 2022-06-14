@@ -14,58 +14,56 @@
  */
 package com.amazon.ionschema.model
 
-import com.amazon.ionelement.api.*
+import com.amazon.ionelement.api.AnyElement
+import com.amazon.ionelement.api.IonElement
+import com.amazon.ionelement.api.StructElement
+import com.amazon.ionelement.api.StructField
+import com.amazon.ionelement.api.field
+import com.amazon.ionelement.api.ionStructOf
 
 /**
  * Why is there a [ConstraintSerdeMediator] and a [ConstraintValidatorMediator] instead of one big mediator?
  * In theory, the AST should be language-version agnostic, so we want to be able to have 1 [ConstraintValidatorMediator],
  * and many [ConstraintSerdeMediator]s.
  */
-class ConstraintSerdeMediator(registrations: List<ConstraintSerdeRegistration<*>>) : ConstraintMediator<ConstraintSerdeRegistration<*>>(registrations) {
-    operator fun <C : AstConstraint<C>> get(id: ConstraintId<C>): ConstraintSerdeRegistration<C> {
-        return super._get(id) as ConstraintSerdeRegistration<C>
+class ConstraintSerdeMediator(delegate: ConstraintMediatorDelegate<ConstraintSerdeRegistration<*>>) : ConstraintMediator<ConstraintSerdeRegistration<*>> by delegate {
+    constructor(registrations: List<ConstraintSerdeRegistration<*>>) : this(ConstraintMediatorDelegate<ConstraintSerdeRegistration<*>>(registrations))
+
+    /**
+     * Writes a single [Constraint] to a [StructField]
+     */
+    inline fun <reified T : Constraint<T>> writeConstraint(constraint: Constraint<T>): StructField {
+        val registration: ConstraintSerdeRegistration<T> = get(constraint.id)
+        return field(constraint.id.constraintName, registration.write(constraint as T))
     }
 
     /**
-     * Writes a single [AstConstraint] to a [StructField]
+     * Reads a single [StructField] to produce an [Constraint]
      */
-    inline fun <reified T : AstConstraint<T>> writeConstraint(constraint: AstConstraint<T>): StructField {
-        return field(constraint.id.constraintName, this[constraint.id].write(constraint as T))
-    }
-
-    /**
-     * Reads a single [StructField] to produce an [AstConstraint]
-     */
-    fun readConstraint(field: StructField): AstConstraint<*> {
-        return get(field.name).read(field.value)
+    fun readConstraint(field: StructField): Constraint<*> {
+        return getByName(field.name).read(field.value)
     }
 }
 
-class ConstraintSerdeRegistration<T : AstConstraint<T>>(
+class ConstraintSerdeRegistration<T : Constraint<T>>(
     override val id: ConstraintId<T>,
     val read: (AnyElement) -> T,
     val write: (T) -> IonElement
-) : ConstraintMediator.Registration<T>
+) : Registration<ConstraintSerdeRegistration<T>, T>
 
 // Example of how the ConstraintMediator can be used to read ISL and construct the AST.
-fun readType(ion: StructElement, serdeMediator: ConstraintSerdeMediator): AstType.TypeDefinition {
-    return AstType.TypeDefinition(
+fun readType(ion: StructElement, serdeMediator: ConstraintSerdeMediator): Type.Definition {
+    return Type.Definition(
         constraints = ion.fields
             .filter { it.name in serdeMediator } // Find the fields that are constraints
             .map { serdeMediator.readConstraint(it) } // Read the fields as AstConstraint
             .toSet(),
-        userContent = ion.fields
-            .filterNot { it.name in serdeMediator && it.name == "name" }
-            .map { it.toPair() }
+        userContent = ion.fields.filterNot { it.name in serdeMediator && it.name == "name" }
     )
 }
 
 // Example of how the ConstraintMediator can be used to write ISL from the AST.
-fun writeType(type: AstType.TypeDefinition, serdeMediator: ConstraintSerdeMediator): IonElement {
-    val fields: Iterable<StructField> = type.constraints.map { serdeMediator.writeConstraint(it) } + type.userContent.map { it.toStructField() }
+fun writeType(type: Type.Definition, serdeMediator: ConstraintSerdeMediator): IonElement {
+    val fields: Iterable<StructField> = type.constraints.map { serdeMediator.writeConstraint(it) } + type.userContent
     return ionStructOf(fields)
 }
-
-// Utility functions for working with StructFields
-fun Pair<String, IonElement>.toStructField() = field(first, second)
-fun StructField.toPair() = name to value

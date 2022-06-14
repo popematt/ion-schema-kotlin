@@ -17,7 +17,29 @@ package com.amazon.ionschema.model
 
 import com.amazon.ionelement.api.IonElement
 import com.amazon.ionelement.api.ionSymbol
-import com.amazon.ionschema.model.constraints.*
+import com.amazon.ionschema.model.constraints.AllOfConstraint
+import com.amazon.ionschema.model.constraints.AnnotationsConstraint
+import com.amazon.ionschema.model.constraints.AnyOfConstraint
+import com.amazon.ionschema.model.constraints.ByteLengthConstraint
+import com.amazon.ionschema.model.constraints.CodepointLengthConstraint
+import com.amazon.ionschema.model.constraints.ContainerLengthConstraint
+import com.amazon.ionschema.model.constraints.ContainsConstraint
+import com.amazon.ionschema.model.constraints.ElementConstraint
+import com.amazon.ionschema.model.constraints.FieldsConstraint
+import com.amazon.ionschema.model.constraints.NotConstraint
+import com.amazon.ionschema.model.constraints.OneOfConstraint
+import com.amazon.ionschema.model.constraints.OrderedElementsConstraint
+import com.amazon.ionschema.model.constraints.PrecisionConstraint
+import com.amazon.ionschema.model.constraints.RegexConstraint
+import com.amazon.ionschema.model.constraints.ScaleConstraint
+import com.amazon.ionschema.model.constraints.TimestampOffsetConstraint
+import com.amazon.ionschema.model.constraints.TimestampPrecisionConstraint
+import com.amazon.ionschema.model.constraints.TimestampPrecisionRange
+import com.amazon.ionschema.model.constraints.TimestampPrecisions
+import com.amazon.ionschema.model.constraints.TypeConstraint
+import com.amazon.ionschema.model.constraints.Utf8ByteLengthConstraint
+import com.amazon.ionschema.model.constraints.ValidValue
+import com.amazon.ionschema.model.constraints.ValidValuesConstraint
 import java.math.BigDecimal
 
 // This file contains a straw-man example of a dsl for creating Ion Schemas.
@@ -27,19 +49,19 @@ import java.math.BigDecimal
 // At the bottom of this file, you can find an example of programmatically constructing the
 // types found at https://amzn.github.io/ion-schema/docs/spec.html#customer-profile-data
 
-fun inline(vararg constraints: AstConstraint<*>) = AstType.TypeDefinition(constraints.toList())
-fun inline(vararg constraints: AstConstraint<*>, occurs: DiscreteRange) = AstVariablyOccurringType(occurs, inline(*constraints))
-fun named(typeId: String) = AstType.TypeReference(typeId)
-fun named(typeId: String, occurs: DiscreteRange) = AstVariablyOccurringType(occurs, named(typeId))
-fun import(schemaId: String, typeId: String) = AstType.TypeReference(typeId, schemaId)
-fun import(occurs: DiscreteRange, schemaId: String, typeId: String) = AstVariablyOccurringType(occurs, AstType.TypeReference(typeId, schemaId))
+fun inline(vararg constraints: Constraint<*>) = Type.Definition(constraints.toList())
+fun inline(vararg constraints: Constraint<*>, occurs: DiscreteRange) = VariablyOccurringType(occurs, inline(*constraints))
+fun named(typeId: String) = Type.Reference(typeId)
+fun named(typeId: String, occurs: DiscreteRange) = VariablyOccurringType(occurs, named(typeId))
+fun import(schemaId: String, typeId: String) = Type.Reference(typeId, schemaId)
+fun import(occurs: DiscreteRange, schemaId: String, typeId: String) = VariablyOccurringType(occurs, Type.Reference(typeId, schemaId))
 
 // Constraints
-fun allOf(vararg types: AstType) = AllOfConstraint(types.toList())
-fun allOf(types: Iterable<AstType>) = AllOfConstraint(types)
-fun annotations(type: AstType) = AnnotationsConstraint(type)
-fun anyOf(vararg types: AstType) = AnyOfConstraint(types.toList())
-fun anyOf(types: Iterable<AstType>) = AnyOfConstraint(types)
+fun allOf(vararg types: Type) = AllOfConstraint(types.toList())
+fun allOf(types: Iterable<Type>) = AllOfConstraint(types)
+fun annotations(type: Type) = AnnotationsConstraint(type)
+fun anyOf(vararg types: Type) = AnyOfConstraint(types.toList())
+fun anyOf(types: Iterable<Type>) = AnyOfConstraint(types)
 fun byteLength(range: DiscreteRange) = ByteLengthConstraint(range)
 fun byteLength(value: Int) = ByteLengthConstraint(DiscreteRange(value, value))
 fun codepointLength(range: DiscreteRange) = CodepointLengthConstraint(range)
@@ -48,14 +70,14 @@ fun containerLength(range: DiscreteRange) = ContainerLengthConstraint(range)
 fun containerLength(value: Int) = ContainerLengthConstraint(DiscreteRange(value, value))
 fun contains(vararg values: IonElement) = ContainsConstraint(values.toList())
 fun contains(values: Collection<IonElement>) = ContainsConstraint(values)
-fun element(type: AstType) = ElementConstraint(type)
-fun fields(vararg fields: Pair<String, AstVariablyOccurringType>) = FieldsConstraint(fields.toMap())
-fun fields(fields: Map<String, AstVariablyOccurringType>) = FieldsConstraint(fields)
-fun not(type: AstType) = NotConstraint(type)
-fun oneOf(vararg types: AstType) = OneOfConstraint(types.toList())
-fun oneOf(types: Iterable<AstType>) = OneOfConstraint(types)
-fun orderedElements(vararg types: AstVariablyOccurringType) = OrderedElementsConstraint(types.toList())
-fun orderedElements(types: Iterable<AstVariablyOccurringType>) = OrderedElementsConstraint(types)
+fun element(type: Type) = ElementConstraint(type)
+fun fields(vararg fields: Pair<String, VariablyOccurringType>) = FieldsConstraint(fields.toMap())
+fun fields(fields: Map<String, VariablyOccurringType>) = FieldsConstraint(fields)
+fun not(type: Type) = NotConstraint(type)
+fun oneOf(vararg types: Type) = OneOfConstraint(types.toList())
+fun oneOf(types: Iterable<Type>) = OneOfConstraint(types)
+fun orderedElements(vararg types: VariablyOccurringType) = OrderedElementsConstraint(types.toList())
+fun orderedElements(types: Iterable<VariablyOccurringType>) = OrderedElementsConstraint(types)
 fun precision(range: DiscreteRange) = PrecisionConstraint(range)
 fun precision(value: Int) = PrecisionConstraint(DiscreteRange(value, value))
 fun regex(pattern: String, options: Set<RegexConstraint.Options>) = RegexConstraint(pattern, options)
@@ -67,7 +89,7 @@ fun timestampPrecision(value: TimestampPrecisions) = TimestampPrecisionConstrain
 fun timestampOffset(offset: TimestampOffsetConstraint.Offset) = TimestampOffsetConstraint(offset)
 fun timestampOffset(hours: Int, minutes: Int = 0) = TimestampOffsetConstraint(TimestampOffsetConstraint.Offset.Minutes(hours * 60 + minutes))
 fun timestampOffset(minutes: Int) = TimestampOffsetConstraint(TimestampOffsetConstraint.Offset.Minutes(minutes))
-fun type(type: AstType) = TypeConstraint(type)
+fun type(type: Type) = TypeConstraint(type)
 fun utf8ByteLength(range: DiscreteRange) = Utf8ByteLengthConstraint(range)
 fun utf8ByteLength(value: Int) = Utf8ByteLengthConstraint(DiscreteRange(value, value))
 fun validValues(values: Iterable<ValidValue>) = ValidValuesConstraint(values)
@@ -81,17 +103,17 @@ fun atMost(max: Int) = DiscreteRange(Min, max)
 fun exactly(n: Int) = DiscreteRange(n, n)
 
 // Syntactical sugar
-fun nullOr(type: AstType): AstType = inline(anyOf(type, named("\$null")))
+fun nullOr(type: Type): Type = inline(anyOf(type, named("\$null")))
 fun literal(element: IonElement) = inline(validValues(element))
 
-fun optional(type: AstType) = type.occurs(range(0, 1))
-fun required(type: AstType) = type.occurs(exactly(1))
-fun AstType.occurs(range: DiscreteRange) = AstVariablyOccurringType(range, this)
+fun optional(type: Type) = type.occurs(range(0, 1))
+fun required(type: Type) = type.occurs(exactly(1))
+fun Type.occurs(range: DiscreteRange) = VariablyOccurringType(range, this)
 
 // ISL 1.0-ish syntax for annotations
 fun annotations(vararg annotationSymbols: CharSequence, closed: Boolean = false, required: Boolean = false): AnnotationsConstraint {
     // TODO: make sure this is correct
-    val constraints = mutableListOf<AstConstraint<*>>()
+    val constraints = mutableListOf<Constraint<*>>()
     if (closed) {
         val annotationSymbolValues = annotationSymbols.map {
             ValidValue.SingleValue(ionSymbol(it.toString()))
@@ -107,16 +129,26 @@ fun annotations(vararg annotationSymbols: CharSequence, closed: Boolean = false,
         constraints.add(contains(requiredSymbols))
     }
 
-    return AnnotationsConstraint(AstType.TypeDefinition(constraints.toList()))
+    return AnnotationsConstraint(Type.Definition(constraints.toList()))
 }
 internal class RequiredAnnotation(val s: String) : CharSequence by s
 internal class OptionalAnnotation(val s: String) : CharSequence by s
 fun required(s: String): CharSequence = RequiredAnnotation(s)
 fun optional(s: String): CharSequence = OptionalAnnotation(s)
 
+val fooSchema = Schema {
+    id = "foo"
+    header = Header {
+        imports = listOf()
+    }
+    content = listOf(
+
+    )
+}
+
 
 // Example usage:
-val shortStringType = AstSchema.SchemaContent.NamedType(
+val shortStringType = Schema.SchemaContent.NamedType(
     name = "short_string",
     constraints = listOf(
         type(named("string")),
@@ -124,7 +156,7 @@ val shortStringType = AstSchema.SchemaContent.NamedType(
     )
 )
 
-val stateType = AstSchema.SchemaContent.NamedType(
+val stateType = Schema.SchemaContent.NamedType(
     name = "State",
     constraints = listOf(
         validValues(
@@ -137,7 +169,7 @@ val stateType = AstSchema.SchemaContent.NamedType(
     )
 )
 
-val addressType = AstSchema.SchemaContent.NamedType(
+val addressType = Schema.SchemaContent.NamedType(
     name = "Address",
     constraints = listOf(
         type(named("struct")),
@@ -170,7 +202,7 @@ val addressType = AstSchema.SchemaContent.NamedType(
     )
 )
 
-val customerType = AstSchema.SchemaContent.NamedType(
+val customerType = Schema.SchemaContent.NamedType(
     name = "Customer",
     constraints = listOf(
         type(named("struct")),

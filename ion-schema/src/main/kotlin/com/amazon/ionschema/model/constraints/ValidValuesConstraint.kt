@@ -15,13 +15,19 @@
 package com.amazon.ionschema.model.constraints
 
 import com.amazon.ionelement.api.IonElement
-import com.amazon.ionschema.model.*
+import com.amazon.ionschema.model.Boundary
+import com.amazon.ionschema.model.Constraint
+import com.amazon.ionschema.model.ConstraintId
+import com.amazon.ionschema.model.Range
+import com.amazon.ionschema.model.RangeDelegate
+import com.amazon.ionschema.model.codegen.Builder
 import java.math.BigDecimal
 import java.time.Instant
 
-data class ValidValuesConstraint(val values: Iterable<ValidValue>) : AstConstraint<ValidValuesConstraint> {
-    companion object : ConstraintId<ValidValuesConstraint> by ConstraintId("valid_values") {
-        @JvmField val ID = this@Companion
+@Builder
+data class ValidValuesConstraint(val values: Iterable<ValidValue>) : Constraint<ValidValuesConstraint> {
+    companion object {
+        @JvmField val ID = ConstraintId<ValidValuesConstraint>("valid_values")
     }
     override val id get() = ID
 }

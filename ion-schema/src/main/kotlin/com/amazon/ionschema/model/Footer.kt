@@ -12,16 +12,18 @@
  * express or implied. See the License for the specific language governing
  * permissions and limitations under the License.
  */
-package com.amazon.ionschema.model.constraints
+package com.amazon.ionschema.model
 
-import com.amazon.ionschema.model.ConstraintId
-import com.amazon.ionschema.model.DiscreteRange
+import com.amazon.ionelement.api.StructField
 import com.amazon.ionschema.model.codegen.Builder
 
+/**
+ * Represents the footer of a schema document.
+ */
 @Builder
-data class ScaleConstraint(override val range: DiscreteRange) : DiscreteRangeConstraint<ScaleConstraint> {
+data class Footer(val userContent: List<StructField> = emptyList()) {
     companion object {
-        @JvmField val ID = ConstraintId<ScaleConstraint>("scale")
+        @JvmField
+        val EMPTY = Footer()
     }
-    override val id get() = ID
 }

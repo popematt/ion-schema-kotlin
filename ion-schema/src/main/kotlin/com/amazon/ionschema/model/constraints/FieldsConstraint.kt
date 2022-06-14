@@ -14,13 +14,15 @@
  */
 package com.amazon.ionschema.model.constraints
 
-import com.amazon.ionschema.model.AstConstraint
-import com.amazon.ionschema.model.AstVariablyOccurringType
+import com.amazon.ionschema.model.Constraint
 import com.amazon.ionschema.model.ConstraintId
+import com.amazon.ionschema.model.VariablyOccurringType
+import com.amazon.ionschema.model.codegen.Builder
 
-data class FieldsConstraint(val fields: Map<String, AstVariablyOccurringType>, val closed: Boolean = false) : AstConstraint<FieldsConstraint> {
-    companion object : ConstraintId<FieldsConstraint> by ConstraintId("fields") {
-        @JvmField val ID = this@Companion
+@Builder
+data class FieldsConstraint(val fields: Map<String, VariablyOccurringType>, @Builder.Default("false") val closed: Boolean = false) : Constraint<FieldsConstraint> {
+    companion object {
+        @JvmField val ID = ConstraintId<FieldsConstraint>("fields")
     }
     override val id get() = ID
 }

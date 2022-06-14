@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2018 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License").
  * You may not use this file except in compliance with the License.
@@ -12,17 +12,17 @@
  * express or implied. See the License for the specific language governing
  * permissions and limitations under the License.
  */
-package com.amazon.ionschema.model
 
-/**
- * Represents a type that has an `occurs` value. Note that this includes even
- * implicit `occurs`, such as in this example:
- * ```
- * type::{
- *   fields: {
- *     foo: string  // this `string` has an implicit `occurs: optional`
- *   }
- * }
- * ```
- */
-data class AstVariablyOccurringType(val occurs: DiscreteRange, val type: AstType)
+plugins {
+    id "org.jetbrains.kotlin.jvm"
+}
+
+version = "0.1.0-SNAPSHOT"
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
+}

@@ -14,12 +14,14 @@
  */
 package com.amazon.ionschema.model.constraints
 
-import com.amazon.ionschema.model.AstType
 import com.amazon.ionschema.model.ConstraintId
+import com.amazon.ionschema.model.Type
+import com.amazon.ionschema.model.codegen.Builder
 
-data class NotConstraint(override val type: AstType) : UnaryTypeConstraint<NotConstraint> {
-    companion object : ConstraintId<NotConstraint> by ConstraintId("not") {
-        @JvmField val ID = this@Companion
+@Builder
+data class NotConstraint(override val type: Type) : UnaryTypeConstraint<NotConstraint> {
+    companion object {
+        @JvmField val ID = ConstraintId<NotConstraint>("not")
     }
     override val id get() = ID
 }

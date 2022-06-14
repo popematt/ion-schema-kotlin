@@ -22,30 +22,20 @@ package com.amazon.ionschema.model
  * Note—when creating an API, prefer to use [AnyConstraintId] instead of `TypedConstraintId<*>` so that clients of the
  * API can use members of the [KnownConstraintIds] enum.
  */
-interface ConstraintId<T : AstConstraint<T>> : AnyConstraintId {
-    override val valueType: Class<out AstConstraint<T>>
+interface ConstraintId<T : Constraint<T>> {
+    val constraintName: String
+    val valueType: Class<out Constraint<T>>
 
     companion object {
         /**
          * Factory function for creating instances of [ConstraintId].
          */
         @JvmStatic
-        fun <T : AstConstraint<T>> create(constraintName: String, valueType: Class<T>): ConstraintId<T> = ConstraintIdImpl(constraintName, valueType)
+        fun <T : Constraint<T>> create(constraintName: String, valueType: Class<T>): ConstraintId<T> = ConstraintIdImpl(constraintName, valueType)
 
         // Kotlin-idiomatic pseudo-constructor. Not callable from Java because of the reified type parameter.
-        inline operator fun <reified T : AstConstraint<T>> invoke(constraintId: String) = create(constraintId, T::class.java)
+        inline operator fun <reified T : Constraint<T>> invoke(constraintId: String) = create(constraintId, T::class.java)
     }
 }
 
-private data class ConstraintIdImpl<T : AstConstraint<T>>(override val constraintName: String, override val valueType: Class<T>) : ConstraintId<T>
-
-/**
- * Use this interface instead of `TypedConstraintId<*>`. This interface exists because it is not allowed for an enum
- * class to implement a generic interface.
- *
- * @see ConstraintId
- */
-interface AnyConstraintId {
-    val constraintName: String
-    val valueType: Class<out AstConstraint<*>>
-}
+private data class ConstraintIdImpl<T : Constraint<T>>(override val constraintName: String, override val valueType: Class<T>) : ConstraintId<T>

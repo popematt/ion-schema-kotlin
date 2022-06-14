@@ -14,12 +14,14 @@
  */
 package com.amazon.ionschema.model.constraints
 
-import com.amazon.ionschema.model.AstConstraint
+import com.amazon.ionschema.model.Constraint
 import com.amazon.ionschema.model.ConstraintId
+import com.amazon.ionschema.model.codegen.Builder
 
-data class RegexConstraint constructor(val pattern: String, val options: Set<Options>) : AstConstraint<RegexConstraint> {
-    companion object : ConstraintId<RegexConstraint> by ConstraintId("regex") {
-        @JvmField val ID = this@Companion
+@Builder
+data class RegexConstraint constructor(val pattern: String, @Builder.Default("emptySet()") val options: Set<Options>) : Constraint<RegexConstraint> {
+    companion object {
+        @JvmField val ID = ConstraintId<RegexConstraint>("regex")
     }
     override val id get() = ID
 

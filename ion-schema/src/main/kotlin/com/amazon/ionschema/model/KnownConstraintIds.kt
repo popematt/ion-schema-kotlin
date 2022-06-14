@@ -14,30 +14,55 @@
  */
 package com.amazon.ionschema.model
 
-import com.amazon.ionschema.model.constraints.*
+import com.amazon.ionschema.model.constraints.AllOfConstraint
+import com.amazon.ionschema.model.constraints.AnnotationsConstraint
+import com.amazon.ionschema.model.constraints.AnyOfConstraint
+import com.amazon.ionschema.model.constraints.ByteLengthConstraint
+import com.amazon.ionschema.model.constraints.CodepointLengthConstraint
+import com.amazon.ionschema.model.constraints.ContainerLengthConstraint
+import com.amazon.ionschema.model.constraints.ContainsConstraint
+import com.amazon.ionschema.model.constraints.ElementConstraint
+import com.amazon.ionschema.model.constraints.FieldsConstraint
+import com.amazon.ionschema.model.constraints.NotConstraint
+import com.amazon.ionschema.model.constraints.OneOfConstraint
+import com.amazon.ionschema.model.constraints.OrderedElementsConstraint
+import com.amazon.ionschema.model.constraints.PrecisionConstraint
+import com.amazon.ionschema.model.constraints.RegexConstraint
+import com.amazon.ionschema.model.constraints.ScaleConstraint
+import com.amazon.ionschema.model.constraints.TimestampOffsetConstraint
+import com.amazon.ionschema.model.constraints.TimestampPrecisionConstraint
+import com.amazon.ionschema.model.constraints.TypeConstraint
+import com.amazon.ionschema.model.constraints.Utf8ByteLengthConstraint
+import com.amazon.ionschema.model.constraints.ValidValuesConstraint
 
 /**
- * An enumeration of all known (ie. built-in) [ConstraintId]s.
+ * A pseudo-enum of all known (ie. built-in) [ConstraintId]s.
+ * We can't use a real enum because it can't extend [ConstraintId]`<T>` without specifying `T`.
  */
-enum class KnownConstraintIds(id: AnyConstraintId) : AnyConstraintId by id {
-    AllOf(AllOfConstraint),
-    Annotations(AnnotationsConstraint),
-    AnyOf(AnyOfConstraint),
-    ByteLength(ByteLengthConstraint),
-    CodepointLength(CodepointLengthConstraint),
-    ContainerLength(ContainerLengthConstraint),
-    Contains(ContainsConstraint),
-    Element(ElementConstraint),
-    Fields(FieldsConstraint),
-    Not(NotConstraint),
-    OneOf(OneOfConstraint),
-    OrderedElements(OrderedElementsConstraint),
-    Precision(PrecisionConstraint),
-    Regex(RegexConstraint),
-    Scale(ScaleConstraint),
-    TimestampOffset(TimestampOffsetConstraint),
-    TimestampPrecision(TimestampPrecisionConstraint),
-    Type(TypeConstraint),
-    Utf8ByteLength(Utf8ByteLengthConstraint),
-    ValidValues(ValidValuesConstraint);
+object KnownConstraintIds {
+    val AllOf = AllOfConstraint.ID
+    val Annotations = AnnotationsConstraint.ID
+    val AnyOf = AnyOfConstraint.ID
+    val ByteLength = ByteLengthConstraint.ID
+    val CodepointLength = CodepointLengthConstraint.ID
+    val ContainerLength = ContainerLengthConstraint.ID
+    val Contains = ContainsConstraint.ID
+    val Element = ElementConstraint.ID
+    val Fields = FieldsConstraint.ID
+    val Not = NotConstraint.ID
+    val OneOf = OneOfConstraint.ID
+    val OrderedElements = OrderedElementsConstraint.ID
+    val Precision = PrecisionConstraint.ID
+    val Regex = RegexConstraint.ID
+    val Scale = ScaleConstraint.ID
+    val TimestampOffset = TimestampOffsetConstraint.ID
+    val TimestampPrecision = TimestampPrecisionConstraint.ID
+    val Type = TypeConstraint.ID
+    val Utf8ByteLength = Utf8ByteLengthConstraint.ID
+    val ValidValues = ValidValuesConstraint.ID
+
+    fun values() = listOf(
+        AllOf, Annotations, AnyOf, ByteLength, CodepointLength, ContainerLength, Contains, Element, Fields, Not, OneOf,
+        OrderedElements, Precision, Regex, Scale, TimestampOffset, TimestampPrecision, Type, Utf8ByteLength, ValidValues
+    )
 }

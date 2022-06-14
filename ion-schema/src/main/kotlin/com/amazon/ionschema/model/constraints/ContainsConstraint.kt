@@ -15,12 +15,14 @@
 package com.amazon.ionschema.model.constraints
 
 import com.amazon.ionelement.api.IonElement
-import com.amazon.ionschema.model.AstConstraint
+import com.amazon.ionschema.model.Constraint
 import com.amazon.ionschema.model.ConstraintId
+import com.amazon.ionschema.model.codegen.Builder
 
-data class ContainsConstraint(val values: Collection<IonElement>) : AstConstraint<ContainsConstraint> {
-    companion object : ConstraintId<ContainsConstraint> by ConstraintId("contains") {
-        @JvmField val ID = this@Companion
+@Builder
+data class ContainsConstraint(val values: Collection<IonElement>) : Constraint<ContainsConstraint> {
+    companion object {
+        @JvmField val ID = ConstraintId<ContainsConstraint>("contains")
     }
     override val id get() = ID
 }

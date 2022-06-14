@@ -14,15 +14,15 @@
  */
 package com.amazon.ionschema.model.constraints
 
-import com.amazon.ionschema.model.AstConstraint
-import com.amazon.ionschema.model.AstType
+import com.amazon.ionschema.model.Constraint
 import com.amazon.ionschema.model.DiscreteRange
+import com.amazon.ionschema.model.Type
 
 /**
  * Common interface for constraints that have range over discrete integers as their only argument.
  * This allows for code reuse when reading, writing, and validating the `scale`, `precision`, and `*_length` constraints.
  */
-interface DiscreteRangeConstraint<T> : AstConstraint<T> where T : AstConstraint<T>, T : DiscreteRangeConstraint<T> {
+interface DiscreteRangeConstraint<T> : Constraint<T> where T : Constraint<T>, T : DiscreteRangeConstraint<T> {
     val range: DiscreteRange
 }
 
@@ -30,14 +30,14 @@ interface DiscreteRangeConstraint<T> : AstConstraint<T> where T : AstConstraint<
  * Common interface for constraints that have a single type as their argument.
  * This allows for code reuse when reading and writing the `element`, `not`, and `type` constraints.
  */
-interface UnaryTypeConstraint<T> : AstConstraint<T> where T : AstConstraint<T>, T : UnaryTypeConstraint<T> {
-    val type: AstType
+interface UnaryTypeConstraint<T> : Constraint<T> where T : Constraint<T>, T : UnaryTypeConstraint<T> {
+    val type: Type
 }
 
 /**
  * Common interface for constraints that have a list of N types as their only argument.
- * This allows for code reuse when reading and writing the`any_of`, `all_of`, and `one_of` constraints.
+ * This allows for code reuse when reading and writing the `any_of`, `all_of`, and `one_of` constraints.
  */
-interface NAryTypeConstraint<T> : AstConstraint<T> where T : AstConstraint<T>, T : NAryTypeConstraint<T> {
-    val types: Iterable<AstType>
+interface NAryTypeConstraint<T> : Constraint<T> where T : Constraint<T>, T : NAryTypeConstraint<T> {
+    val types: Iterable<Type>
 }

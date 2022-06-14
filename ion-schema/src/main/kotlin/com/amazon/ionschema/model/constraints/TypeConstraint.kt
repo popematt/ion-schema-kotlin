@@ -14,12 +14,14 @@
  */
 package com.amazon.ionschema.model.constraints
 
-import com.amazon.ionschema.model.AstType
 import com.amazon.ionschema.model.ConstraintId
+import com.amazon.ionschema.model.Type
+import com.amazon.ionschema.model.codegen.Builder
 
-data class TypeConstraint(override val type: AstType) : UnaryTypeConstraint<TypeConstraint> {
-    companion object : ConstraintId<TypeConstraint> by ConstraintId("type") {
-        @JvmField val ID = this@Companion
+@Builder
+data class TypeConstraint(override val type: Type) : UnaryTypeConstraint<TypeConstraint> {
+    companion object {
+        @JvmField val ID = ConstraintId<TypeConstraint>("type")
     }
     override val id get() = ID
 }

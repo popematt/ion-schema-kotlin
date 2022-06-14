@@ -14,14 +14,16 @@
  */
 package com.amazon.ionschema.model.constraints
 
-import com.amazon.ionschema.model.AstConstraint
-import com.amazon.ionschema.model.AstVariablyOccurringType
+import com.amazon.ionschema.model.Constraint
 import com.amazon.ionschema.model.ConstraintId
+import com.amazon.ionschema.model.VariablyOccurringType
+import com.amazon.ionschema.model.codegen.Builder
 
-data class OrderedElementsConstraint(val types: Iterable<AstVariablyOccurringType>) :
-    AstConstraint<OrderedElementsConstraint> {
-    companion object : ConstraintId<OrderedElementsConstraint> by ConstraintId("ordered_elements") {
-        @JvmField val ID = this@Companion
+@Builder
+data class OrderedElementsConstraint(val types: Iterable<VariablyOccurringType>) :
+    Constraint<OrderedElementsConstraint> {
+    companion object {
+        @JvmField val ID = ConstraintId<OrderedElementsConstraint>("ordered_elements")
     }
     override val id get() = ID
 }

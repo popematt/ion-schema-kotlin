@@ -16,10 +16,12 @@ package com.amazon.ionschema.model.constraints
 
 import com.amazon.ionschema.model.ConstraintId
 import com.amazon.ionschema.model.DiscreteRange
+import com.amazon.ionschema.model.codegen.Builder
 
+@Builder
 data class CodepointLengthConstraint(override val range: DiscreteRange) : DiscreteRangeConstraint<CodepointLengthConstraint> {
-    companion object : ConstraintId<CodepointLengthConstraint> by ConstraintId("codepoint_length") {
-        @JvmField val ID = this@Companion
+    companion object {
+        @JvmField val ID = ConstraintId<CodepointLengthConstraint>("codepoint_length")
     }
     override val id get() = ID
 }

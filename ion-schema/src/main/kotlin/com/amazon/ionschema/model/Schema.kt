@@ -15,31 +15,35 @@
 package com.amazon.ionschema.model
 
 import com.amazon.ionelement.api.IonElement
+import com.amazon.ionelement.api.StructField
+import com.amazon.ionschema.model.codegen.Builder
 
 /**
  * Represents a complete Ion Schema document. Note—the model does not include a particular ISL version because the AST
  * is intended to be a version-agnostic representation of ISL.
  */
-data class AstSchema(
+@Builder
+data class Schema(
     val id: String? = null,
-    val header: AstHeader,
+    val header: Header,
     val content: List<SchemaContent>,
-    val footer: AstFooter,
+    val footer: Footer,
 ) {
-
+    companion object
     val types get() = content.filterIsInstance<SchemaContent.NamedType>()
 
     sealed class SchemaContent {
         /**
          * Represents a top-level type declaration in a schema document.
          */
-        data class NamedType(val name: String, val definition: AstType.TypeDefinition) : SchemaContent() {
+        data class NamedType(val name: String, val definition: Type.Definition) : SchemaContent() {
+            // @GeneratedBuilder
             @JvmOverloads constructor(
                 name: String,
-                constraints: Collection<AstConstraint<*>>,
-                userContent: List<Pair<String, IonElement>> = emptyList()
+                constraints: Collection<Constraint<*>>,
+                userContent: List<StructField> = emptyList()
             ) : this(
-                name, AstType.TypeDefinition(constraints, userContent)
+                name, Type.Definition(constraints, userContent)
             )
         }
 

@@ -16,10 +16,12 @@ package com.amazon.ionschema.model.constraints
 
 import com.amazon.ionschema.model.ConstraintId
 import com.amazon.ionschema.model.DiscreteRange
+import com.amazon.ionschema.model.codegen.Builder
 
+@Builder
 data class Utf8ByteLengthConstraint(override val range: DiscreteRange) : DiscreteRangeConstraint<Utf8ByteLengthConstraint> {
-    companion object : ConstraintId<Utf8ByteLengthConstraint> by ConstraintId("utf8_byte_length") {
-        @JvmField val ID = this@Companion
+    companion object {
+        @JvmField val ID = ConstraintId<Utf8ByteLengthConstraint>("utf8_byte_length")
     }
     override val id get() = ID
 }
