@@ -22,3 +22,19 @@ import java.io.Closeable
  * when [close()] is called, after it is no longer needed.
  */
 interface CloseableIterator<T> : Iterator<T>, Closeable
+
+fun <T: Any> CloseableIterator<T>.asIterable(): Iterable<T> {
+    return object: Iterable<T> {
+        override fun iterator(): Iterator<T> = object: Iterator<T> by this@asIterable {
+            override fun hasNext(): Boolean {
+                return this@asIterable.hasNext().also { hasNext -> if (!hasNext) close() }
+            }
+        }
+    }
+}
+fun <T: Any> Iterable<T>.asCloseableIterator(): CloseableIterator<T> {
+    return object: CloseableIterator<T>, Iterator<T> by this@asCloseableIterator.iterator() {
+        override fun close() = Unit
+    }
+}
+
