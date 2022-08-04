@@ -15,8 +15,8 @@
 
 package com.amazon.ionschema.internal
 
-import com.amazon.ion.IonSymbol
-import com.amazon.ion.IonValue
+import com.amazon.ionelement.api.IonElement
+import com.amazon.ionelement.api.SymbolElement
 import com.amazon.ionschema.Violation
 import com.amazon.ionschema.Violations
 import com.amazon.ionschema.internal.constraint.ConstraintBase
@@ -25,20 +25,18 @@ import com.amazon.ionschema.internal.constraint.ConstraintBase
  * Implementation of [Type] representing types identified only by name.
  */
 internal class TypeNamed(
-    ion: IonSymbol,
+    ion: SymbolElement,
     internal val type: TypeInternal
-) : TypeInternal by type, ConstraintBase(ion) {
+) : TypeInternal by type, ConstraintBase("type+QWERTY7", ion) {
 
-    override fun validate(value: IonValue, issues: Violations) {
-        val struct = ion.system.newEmptyStruct()
-        struct.put("type", ion.clone())
-        val violation = Violation(struct, "type_mismatch")
+    override fun validate(value: IonElement, issues: Violations) {
+        val violation = Violation(constraintField, "type_mismatch")
         type.validate(value, violation)
         if (!violation.isValid()) {
-            violation.message = "expected type %s".format(name)
+            violation.message = "expected type $name"
             issues.add(violation)
         }
     }
 
-    override val name = ion.stringValue()
+    override val name = ion.textValue
 }

@@ -15,7 +15,7 @@
 
 package com.amazon.ionschema.internal.util
 
-import com.amazon.ion.IonList
+import com.amazon.ionelement.api.ListElement
 import com.amazon.ionschema.InvalidSchemaException
 
 /**
@@ -23,7 +23,7 @@ import com.amazon.ionschema.InvalidSchemaException
  * Mostly delegates to RangeInt.
  */
 internal class RangeIntNonNegative(
-    private val ion: IonList,
+    private val ion: ListElement,
     private val delegate: RangeInt = RangeInt(ion)
 ) : Range<Int> by delegate {
 

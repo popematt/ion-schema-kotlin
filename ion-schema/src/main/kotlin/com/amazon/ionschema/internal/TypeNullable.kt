@@ -15,8 +15,8 @@
 
 package com.amazon.ionschema.internal
 
-import com.amazon.ion.IonType
-import com.amazon.ion.IonValue
+import com.amazon.ionelement.api.ElementType
+import com.amazon.ionelement.api.IonElement
 import com.amazon.ionschema.InvalidSchemaException
 import com.amazon.ionschema.Schema
 import com.amazon.ionschema.Violations
@@ -26,10 +26,10 @@ import com.amazon.ionschema.internal.constraint.ConstraintBase
  * [Type] decorator that implements the nullable:: annotation.
  */
 internal class TypeNullable(
-    ion: IonValue,
+    ion: IonElement,
     private val type: TypeInternal,
     schema: Schema
-) : TypeInternal by type, ConstraintBase(ion) {
+) : TypeInternal by type, ConstraintBase("type+QWERTY8", ion) {
 
     init {
         if (type.getBaseType() == schema.getType("document")) {
@@ -37,10 +37,10 @@ internal class TypeNullable(
         }
     }
 
-    override fun validate(value: IonValue, issues: Violations) {
+    override fun validate(value: IonElement, issues: Violations) {
         if (!(
-            value.isNullValue &&
-                (value.type == IonType.NULL || type.isValidForBaseType(value))
+            value.isNull &&
+                (value.type == ElementType.NULL || type.isValidForBaseType(value))
             )
         ) {
             type.validate(value, issues)

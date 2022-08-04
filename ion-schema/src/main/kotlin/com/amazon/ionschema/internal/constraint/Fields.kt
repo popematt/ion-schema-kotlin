@@ -15,16 +15,13 @@
 
 package com.amazon.ionschema.internal.constraint
 
-import com.amazon.ion.IonStruct
-import com.amazon.ion.IonSymbol
-import com.amazon.ion.IonValue
+import com.amazon.ionelement.api.*
 import com.amazon.ionschema.InvalidSchemaException
 import com.amazon.ionschema.Schema
 import com.amazon.ionschema.Violation
 import com.amazon.ionschema.ViolationChild
 import com.amazon.ionschema.Violations
 import com.amazon.ionschema.internal.Constraint
-import com.amazon.ionschema.internal.constraint.Occurs.Companion.OPTIONAL
 
 /**
  * Implements the fields constraint.
@@ -35,57 +32,60 @@ import com.amazon.ionschema.internal.constraint.Occurs.Companion.OPTIONAL
  * @see https://amzn.github.io/ion-schema/docs/spec.html#fields
  */
 internal class Fields(
-    ionValue: IonValue,
+    ion: StructField,
+    container: StructElement,
     private val schema: Schema
-) : ConstraintBase(ionValue), Constraint {
+) : ConstraintBase(ion), Constraint {
 
-    private val ionStruct: IonStruct
-    private val contentConstraintIon: IonValue?
+    private val structElement: StructElement
+    private val contentConstraintIon: SymbolElement?
     private val contentClosed: Boolean
 
     init {
-        if (ionValue.isNullValue || ionValue !is IonStruct || ionValue.size() == 0) {
+        if (ion.value.isNull || ion.value !is StructElement || ion.value.asStruct().fields.isEmpty()) {
             throw InvalidSchemaException(
-                "fields must be a struct that defines at least one field ($ionValue)"
+                "fields must be a struct that defines at least one field ($ion)"
             )
         }
-        ionStruct = ionValue
-        ionStruct.associateBy(
-            { it.fieldName },
-            { Occurs(it, schema, OPTIONAL) }
+        structElement = ion.value.asStruct()
+
+        // Validates the fields
+        structElement.fields.associateBy(
+            { it.name },
+            { Occurs(it.value, schema, Occurs.DefaultOccurs.OPTIONAL) }
         )
 
-        contentConstraintIon = (ionStruct.container as? IonStruct)?.get("content") as? IonSymbol
-        contentClosed = contentConstraintIon?.stringValue().equals("closed")
+        contentConstraintIon = container.getOptional("content") as? SymbolElement
+        contentClosed = contentConstraintIon?.textValue.equals("closed")
     }
 
-    override fun validate(value: IonValue, issues: Violations) {
-        validateAs<IonStruct>(value, issues) { v ->
-            val fieldIssues = Violation(ion, "fields_mismatch", "one or more fields don't match expectations")
-            val fieldConstraints = ionStruct.associateBy(
-                { it.fieldName },
+    override fun validate(value: IonElement, issues: Violations) {
+        validateAs<StructElement>(value, issues) { v ->
+            val fieldIssues = Violation(constraintField, "fields_mismatch", "one or more fields don't match expectations")
+            val fieldConstraints = structElement.fields.associateBy(
+                { it.name },
                 {
                     Pair(
-                        Occurs(it, schema, OPTIONAL, isField = true),
-                        ViolationChild(fieldName = it.fieldName)
+                        Occurs(it.value, schema, Occurs.DefaultOccurs.OPTIONAL),
+                        ViolationChild(fieldName = it.name)
                     )
                 }
             )
             var closedContentIssues: Violation? = null
 
-            v.iterator().forEach {
-                val pair = fieldConstraints[it.fieldName]
+            v.fields.iterator().forEach {
+                val pair = fieldConstraints[it.name]
                 if (pair != null) {
-                    pair.first.validate(it, pair.second)
+                    pair.first.validate(it.value, pair.second)
                 } else if (contentClosed) {
                     if (closedContentIssues == null) {
                         closedContentIssues = Violation(
-                            contentConstraintIon,
+                            field("content", contentConstraintIon!!),
                             "unexpected_content", "found one or more unexpected fields"
                         )
                         issues.add(closedContentIssues!!)
                     }
-                    closedContentIssues!!.add(ViolationChild(it.fieldName, value = it))
+                    closedContentIssues!!.add(ViolationChild(it.name, value = it.value))
                 }
             }
 

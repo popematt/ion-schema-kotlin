@@ -15,10 +15,7 @@
 
 package com.amazon.ionschema.internal.constraint
 
-import com.amazon.ion.IonList
-import com.amazon.ion.IonSequence
-import com.amazon.ion.IonStruct
-import com.amazon.ion.IonValue
+import com.amazon.ionelement.api.*
 import com.amazon.ionschema.InvalidSchemaException
 import com.amazon.ionschema.Schema
 import com.amazon.ionschema.Violation
@@ -32,18 +29,22 @@ import com.amazon.ionschema.internal.util.IntRange
  * @see https://amzn.github.io/ion-schema/docs/spec.html#ordered_elements
  */
 internal class OrderedElements(
-    ion: IonValue,
+    field: StructField,
     private val schema: Schema
-) : ConstraintBase(ion) {
+) : ConstraintBase(field) {
 
-    private val nfa: NFA<IonValue> = run {
-        if (ion !is IonList || ion.isNullValue) {
+    private val nfa: NFA<IonElement> = run {
+        if (ion !is ListElement || ion.isNull) {
             throw InvalidSchemaException("Invalid ordered_elements constraint: $ion")
         }
 
         val stateBuilder = OrderedElementsNfaStatesBuilder()
-        ion.forEach {
-            val occursRange = IntRange.toIntRange((it as? IonStruct)?.get("occurs")) ?: IntRange.REQUIRED
+        ion.values.forEach {
+            val occursRange = (it as? StructElement)
+                ?.takeIf { it.containsField("occurs") }
+                ?.get("occurs")
+                ?.let { IntRange.toIntRange(it) }
+                ?: IntRange.REQUIRED
             val typeRef = TypeReference.create(it, schema)
             stateBuilder.addState(
                 min = occursRange.lower,
@@ -54,17 +55,17 @@ internal class OrderedElements(
         NFA(stateBuilder.build())
     }
 
-    override fun validate(value: IonValue, issues: Violations) {
+    override fun validate(value: IonElement, issues: Violations) {
         validate(value, issues, debug = false)
     }
 
     // Visible for testing
-    internal fun validate(value: IonValue, issues: Violations, debug: Boolean) {
-        validateAs<IonSequence>(value, issues) { v ->
-            if (!nfa.matches(v, debug)) {
+    internal fun validate(value: IonElement, issues: Violations, debug: Boolean) {
+        validateAs<SeqElement>(value, issues) { v ->
+            if (!nfa.matches(v.values, debug)) {
                 issues.add(
                     Violation(
-                        ion, "ordered_elements_mismatch",
+                        constraintField, "ordered_elements_mismatch",
                         "one or more ordered elements don't match specification"
                     )
                 )

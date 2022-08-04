@@ -15,12 +15,12 @@
 
 package com.amazon.ionschema.internal.constraint
 
-import com.amazon.ion.IonValue
+import com.amazon.ionelement.api.IonElement
 
 /**
  * Builds states and edges for a [NFA] for the `ordered_elements` constraint.
  *
- * In this case, the `NFA`'s `Event` type parameter is an [IonValue] from the input that is being validated by the
+ * In this case, the `NFA`'s `Event` type parameter is an [IonElement] from the input that is being validated by the
  * Ion Schema System, and [NFA.State] is used to model an entry in the `ordered_elements` list.
  *
  * ### Example
@@ -36,9 +36,9 @@ import com.amazon.ion.IonValue
  * ```markdown
  * | ID |     Entry Condition     | Re-entry Condition | Exit Condition |
  * |----|:-----------------------:|:------------------:|:--------------:|
- * | 1  | ionValue.type == symbol |     visits <= 1    |   visits >= 1  |
- * | 2  | ionValue.type == number |     visits <= 1    |   visits >= 0  |
- * | 3  | ionValue.type == int    |     visits <= 4    |   visits >= 2  |
+ * | 1  | IonElement.type == symbol |     visits <= 1    |   visits >= 1  |
+ * | 2  | IonElement.type == number |     visits <= 1    |   visits >= 0  |
+ * | 3  | IonElement.type == int    |     visits <= 4    |   visits >= 2  |
  * ```
  * And then combine them to form this graph:
  * ```
@@ -90,12 +90,12 @@ import com.amazon.ion.IonValue
  */
 internal class OrderedElementsNfaStatesBuilder {
 
-    private val stateInputs = mutableListOf<NFA.State<IonValue>>(NFA.State.Initial)
+    private val stateInputs = mutableListOf<NFA.State<IonElement>>(NFA.State.Initial)
 
-    fun addState(min: Comparable<Int>, max: Comparable<Int>, matches: (IonValue) -> Boolean): OrderedElementsNfaStatesBuilder {
+    fun addState(min: Comparable<Int>, max: Comparable<Int>, matches: (IonElement) -> Boolean): OrderedElementsNfaStatesBuilder {
         val nfaState = NFA.State.Intermediate(
             id = stateInputs.size,
-            entryCondition = { event: IonValue -> matches(event) },
+            entryCondition = { event: IonElement -> matches(event) },
             reentryCondition = { visits -> max >= visits },
             exitCondition = { visits -> min <= visits }
         )
@@ -103,11 +103,11 @@ internal class OrderedElementsNfaStatesBuilder {
         return this
     }
 
-    fun build(): Map<NFA.State<IonValue>, Set<NFA.State<IonValue>>> {
+    fun build(): Map<NFA.State<IonElement>, Set<NFA.State<IonElement>>> {
         val states = stateInputs + NFA.State.Final
 
         val transitions = states.mapIndexed { i, stateI ->
-            val transitionsForStateI = mutableSetOf<NFA.State<IonValue>>()
+            val transitionsForStateI = mutableSetOf<NFA.State<IonElement>>()
 
             // Loop back to self, if max is >= 2
             if (stateI.canReenter(2)) transitionsForStateI += stateI

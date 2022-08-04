@@ -15,11 +15,9 @@
 
 package com.amazon.ionschema.internal.util
 
-import com.amazon.ion.IonInt
-import com.amazon.ion.IonList
-import com.amazon.ion.IonSymbol
-import com.amazon.ion.IonValue
 import com.amazon.ion.system.IonSystemBuilder
+import com.amazon.ionelement.api.*
+import com.amazon.ionelement.api.ListElement
 import com.amazon.ionschema.InvalidSchemaException
 import java.math.BigInteger
 
@@ -27,13 +25,13 @@ internal interface IntRange {
     companion object {
         private val ION = IonSystemBuilder.standard().build()
 
-        internal val OPTIONAL: IntRange = toIntRange(ION.singleValue("optional"))!!
-        internal val REQUIRED: IntRange = toIntRange(ION.singleValue("required"))!!
+        internal val OPTIONAL: IntRange = toIntRange(ionSymbol("optional"))!!
+        internal val REQUIRED: IntRange = toIntRange(ionSymbol("required"))!!
 
-        fun toIntRange(ion: IonValue?) = when (ion) {
-            is IonInt -> IntRangeForIonInt(ion)
-            is IonList -> IntRangeForIonList(ion)
-            is IonSymbol -> IntRangeForIonSymbol(ion)
+        fun toIntRange(ion: IonElement?) = when (ion) {
+            is IntElement -> IntRangeForIonInt(ion)
+            is ListElement -> IntRangeForListElement(ion)
+            is SymbolElement -> IntRangeForIonSymbol(ion)
             null -> null
             else -> throw InvalidSchemaException("Unable to parse $ion as an int range")
         }
@@ -46,8 +44,8 @@ internal interface IntRange {
     fun contains(value: BigInteger): Boolean
 }
 
-private class IntRangeForIonList(
-    private val ion: IonList
+private class IntRangeForListElement(
+    private val ion: ListElement
 ) : IntRange {
 
     companion object {
@@ -59,15 +57,15 @@ private class IntRangeForIonList(
         checkRange(ion)
     }
 
-    override val lower = when {
-        isRangeMin(ion[0]) -> MIN
-        ion[0] is IonInt -> IntRangeLowerBoundary(ion[0] as IonInt)
+    override val lower = when (ion[0]) {
+        ionSymbol("min") -> MIN
+        is IntElement -> IntRangeLowerBoundary(ion[0] as IntElement)
         else -> throw InvalidSchemaException("Unable to parse lower bound of $ion")
     }
 
-    override val upper = when {
-        isRangeMax(ion[1]) -> MAX
-        ion[1] is IonInt -> IntRangeUpperBoundary(ion[1] as IonInt)
+    override val upper = when (ion[1]) {
+        ionSymbol("max") -> MAX
+        is IntElement -> IntRangeUpperBoundary(ion[1] as IntElement)
         else -> throw InvalidSchemaException("Unable to parse upper bound of $ion")
     }
 
@@ -76,10 +74,10 @@ private class IntRangeForIonList(
 }
 
 private class IntRangeForIonInt(
-    private val ion: IonInt
+    private val ion: IntElement
 ) : IntRange {
 
-    private val theValue = ion.bigIntegerValue()
+    private val theValue = ion.bigIntegerValue
 
     private val boundary = object : IntRangeBoundary {
         override fun compareTo(other: BigInteger) = theValue.compareTo(other)
@@ -92,16 +90,16 @@ private class IntRangeForIonInt(
 }
 
 private class IntRangeForIonSymbol private constructor(
-    private val ion: IonSymbol,
+    private val ion: SymbolElement,
     delegate: IntRange
 ) : IntRange by delegate {
 
-    internal constructor(ion: IonSymbol) :
+    internal constructor(ion: SymbolElement) :
         this(
             ion,
-            when (ion.stringValue()) {
-                "optional" -> IntRangeForIonList(ion.system.singleValue("range::[0, 1]") as IonList)
-                "required" -> IntRangeForIonInt(ion.system.singleValue("1") as IonInt)
+            when (ion.textValue) {
+                "optional" -> IntRangeForListElement(loadSingleElement("range::[0, 1]").asList())
+                "required" -> IntRangeForIonInt(loadSingleElement("1").asInt())
                 else -> throw InvalidSchemaException("Unable to parse $ion as an int range")
             }
         )
@@ -115,11 +113,11 @@ internal interface IntRangeBoundary : Comparable<Int> {
 }
 
 private abstract class IntRangeBoundaryBase(
-    ion: IonInt,
+    ion: IntElement,
     compareToResponseWhenExclusiveAndEqual: Int
 ) : IntRangeBoundary {
 
-    private val value = ion.bigIntegerValue()
+    private val value = ion.bigIntegerValue
 
     private val compareToResponseWhenEqual = when (RangeBoundaryType.forIon(ion)) {
         RangeBoundaryType.INCLUSIVE -> 0
@@ -135,8 +133,8 @@ private abstract class IntRangeBoundaryBase(
     }
 }
 
-private class IntRangeLowerBoundary(ion: IonInt) : IntRangeBoundaryBase(ion, -1)
-private class IntRangeUpperBoundary(ion: IonInt) : IntRangeBoundaryBase(ion, 1)
+private class IntRangeLowerBoundary(ion: IntElement) : IntRangeBoundaryBase(ion, -1)
+private class IntRangeUpperBoundary(ion: IntElement) : IntRangeBoundaryBase(ion, 1)
 private class IntRangeBoundaryConstant(private val compareResult: Int) : IntRangeBoundary {
     override operator fun compareTo(other: BigInteger) = compareResult
 }

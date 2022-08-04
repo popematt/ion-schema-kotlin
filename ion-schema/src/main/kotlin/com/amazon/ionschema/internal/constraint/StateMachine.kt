@@ -15,7 +15,7 @@
 
 package com.amazon.ionschema.internal.constraint
 
-import com.amazon.ion.IonValue
+import com.amazon.ionelement.api.IonElement
 import com.amazon.ionschema.internal.util.IntRange
 
 private val OPEN_CONTENT_FLAG = Any()
@@ -61,7 +61,7 @@ internal class StateMachineBuilder {
  * Implements a Non-deterministic Finite Automata (NFA) based on an algorithm developed
  * by Ken Thompson.  With thanks to Russ Cox for a very informative writeup.
  *
- * This implementation determines whether a given Iterator<IonValue> is valid against
+ * This implementation determines whether a given Iterator<IonElement> is valid against
  * the states and transitions of the state machine.  It implements NFAs not by converting
  * them into DFAs in advance, but rather by allowing the machine to progress in multiple states
  * (see []StateSet]) concurrently.  This has the added benefit of avoiding the need to backtrack.
@@ -135,7 +135,7 @@ internal class StateMachine(
     private val initialState: State,
     private val openContent: Any?
 ) {
-    fun matches(iter: Iterator<IonValue>): Boolean {
+    fun matches(iter: Iterator<IonElement>): Boolean {
         if (DEBUG) { println(this) }
 
         val stateSet = StateSet(initialState, openContent)
@@ -145,7 +145,7 @@ internal class StateMachine(
         if (DEBUG) { debug(stateSet) }
         iter.forEach { ion ->
             stateSet.forEach { state, _ ->
-                state.transition(EventIonValue(ion), stateSet)
+                state.transition(EventIonElement(ion), stateSet)
             }
             stateSet.applyVisits()
             if (DEBUG) { debug(stateSet, ion) }
@@ -154,7 +154,7 @@ internal class StateMachine(
         return stateSet.hasFinalState
     }
 
-    private fun debug(stateSet: StateSet, value: IonValue? = null) {
+    private fun debug(stateSet: StateSet, value: IonElement? = null) {
         print(if (stateSet.hasFinalState) { "F" } else { "." })
         if (value == null) {
             print(" <init> --> ")
@@ -248,7 +248,7 @@ internal class State private constructor(
     }
 
     internal fun transition(event: Event? = null, stateSet: StateMachine.StateSet) {
-        val value = (event as? EventIonValue)?.ion
+        val value = (event as? EventIonElement)?.ion
         val visitCount = stateSet.visitCount(this)
         transitions.forEach { eventCandidate, toState ->
             when {
@@ -301,17 +301,17 @@ internal class State private constructor(
 
 // base class for all event types
 internal abstract class Event {
-    abstract fun matches(value: IonValue?): Boolean
+    abstract fun matches(value: IonElement?): Boolean
 }
 
 // represents an event that corresponds to a specific Ion value
-internal class EventIonValue(internal val ion: IonValue) : Event() {
-    override fun matches(value: IonValue?) = ion == value
+internal class EventIonElement(internal val ion: IonElement) : Event() {
+    override fun matches(value: IonElement?) = ion == value
     override fun toString() = "$ion"
 }
 
 // represents an event that corresponds to an Ion Schema Type
 internal data class EventSchemaType(private val typeResolver: () -> com.amazon.ionschema.Type) : Event() {
-    override fun matches(value: IonValue?) = if (value == null) { false } else { typeResolver().isValid(value) }
+    override fun matches(value: IonElement?) = if (value == null) { false } else { typeResolver().isValid(value) }
     override fun toString() = "type: ${typeResolver().name}"
 }

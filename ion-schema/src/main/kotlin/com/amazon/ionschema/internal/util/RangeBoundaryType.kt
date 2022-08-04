@@ -15,7 +15,7 @@
 
 package com.amazon.ionschema.internal.util
 
-import com.amazon.ion.IonValue
+import com.amazon.ionelement.api.IonElement
 import com.amazon.ionschema.InvalidSchemaException
 
 /**
@@ -27,8 +27,8 @@ internal enum class RangeBoundaryType {
     INCLUSIVE;
 
     companion object {
-        fun forIon(ion: IonValue): RangeBoundaryType {
-            val isExclusive = ion.hasTypeAnnotation("exclusive")
+        fun forIon(ion: IonElement): RangeBoundaryType {
+            val isExclusive = "exclusive" in ion.annotations
             return when {
                 isRangeMin(ion) || isRangeMax(ion) -> {
                     if (isExclusive) {

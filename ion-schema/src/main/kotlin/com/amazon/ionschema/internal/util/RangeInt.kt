@@ -15,8 +15,8 @@
 
 package com.amazon.ionschema.internal.util
 
-import com.amazon.ion.IonInt
-import com.amazon.ion.IonList
+import com.amazon.ionelement.api.IntElement
+import com.amazon.ionelement.api.ListElement
 import com.amazon.ionschema.InvalidSchemaException
 import java.math.BigDecimal
 
@@ -24,24 +24,21 @@ import java.math.BigDecimal
  * Implementation of Range<Int>, which mostly delegates to RangeBigDecimal.
  */
 internal class RangeInt(
-    private val ion: IonList,
+    private val ion: ListElement,
     private val delegate: RangeBigDecimal = RangeBigDecimal(ion)
 ) : Range<Int> {
 
     init {
-        if (!(ion[0] is IonInt || isRangeMin(ion[0]))) {
+        if (!(ion[0] is IntElement || isRangeMin(ion[0]))) {
             throw InvalidSchemaException("Invalid lower bound in int $ion")
         }
 
-        if (!(ion[1] is IonInt || isRangeMax(ion[1]))) {
+        if (!(ion[1] is IntElement || isRangeMax(ion[1]))) {
             throw InvalidSchemaException("Invalid upper bound in int $ion")
         }
 
         if (delegate.lower.value != null && delegate.upper.value != null &&
-            (
-                delegate.lower.boundaryType == RangeBoundaryType.EXCLUSIVE ||
-                    delegate.upper.boundaryType == RangeBoundaryType.EXCLUSIVE
-                )
+            (delegate.lower.boundaryType == RangeBoundaryType.EXCLUSIVE || delegate.upper.boundaryType == RangeBoundaryType.EXCLUSIVE)
         ) {
             val minPlusOne = delegate.lower.value.add(BigDecimal.ONE)
             if (minPlusOne == delegate.upper.value) {

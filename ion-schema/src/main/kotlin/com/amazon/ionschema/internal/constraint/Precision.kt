@@ -15,8 +15,8 @@
 
 package com.amazon.ionschema.internal.constraint
 
-import com.amazon.ion.IonDecimal
-import com.amazon.ion.IonValue
+import com.amazon.ionelement.api.DecimalElement
+import com.amazon.ionelement.api.StructField
 import com.amazon.ionschema.InvalidSchemaException
 
 /**
@@ -25,8 +25,8 @@ import com.amazon.ionschema.InvalidSchemaException
  * @see https://amzn.github.io/ion-schema/docs/spec.html#precision
  */
 internal class Precision(
-    ion: IonValue
-) : ConstraintBaseIntRange<IonDecimal>(IonDecimal::class.java, ion) {
+    ion: StructField
+) : ConstraintBaseIntRange<DecimalElement>(DecimalElement::class.java, ion) {
 
     init {
         if (range.contains(0)) {
@@ -37,5 +37,5 @@ internal class Precision(
     override val violationCode = "invalid_precision"
     override val violationMessage = "invalid precision %s, expected %s"
 
-    override fun getIntValue(value: IonDecimal) = value.bigDecimalValue().precision()
+    override fun getIntValue(value: DecimalElement) = value.decimalValue.precision()
 }

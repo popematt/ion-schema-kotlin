@@ -1,0 +1,4 @@
+[*]
+disabled_rules=no-wildcard-imports
+#      v-- This property doesn't seem to work, so we need to disable the wildcard imports rule entirely.
+# ij_kotlin_packages_to_use_import_on_demand=com.amazon.ionelement.**

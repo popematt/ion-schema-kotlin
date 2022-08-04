@@ -15,39 +15,43 @@
 
 package com.amazon.ionschema.internal
 
-import com.amazon.ion.IonSymbol
-import com.amazon.ion.IonType
-import com.amazon.ion.IonValue
+import com.amazon.ionelement.api.ElementType
+import com.amazon.ionelement.api.IonElement
+import com.amazon.ionelement.api.SymbolElement
 import com.amazon.ionschema.Violation
 import com.amazon.ionschema.Violations
 import com.amazon.ionschema.internal.constraint.ConstraintBase
-import com.amazon.ionschema.internal.util.markReadOnly
+import com.amazon.ionschema.internal.util.DatagramElement
 
 /**
  * Instantiated to represent individual Ion Types as defined by the
  * Ion Schema Specification.
  */
 internal class TypeIon(
-    nameSymbol: IonSymbol
-) : TypeInternal, ConstraintBase(nameSymbol), TypeBuiltin {
+    nameSymbol: SymbolElement
+) : TypeInternal, ConstraintBase("$nameSymbol", nameSymbol), TypeBuiltin {
 
-    private val ionType = IonType.valueOf(nameSymbol.stringValue().toUpperCase().substring(1))
+    private val ionType = ElementType.valueOf(nameSymbol.textValue.toUpperCase().substring(1))
 
-    override val name = nameSymbol.stringValue()
+    override val name = nameSymbol.textValue
 
     override val schemaId: String? = null
 
-    override val isl = nameSymbol.markReadOnly()
+    override val isl = nameSymbol
 
     override fun getBaseType() = this
 
-    override fun isValidForBaseType(value: IonValue) = ionType.equals(value.type)
+    override fun isValidForBaseType(value: IonElement) = if (value is DatagramElement) {
+        false
+    } else {
+        ionType == value.type
+    }
 
-    override fun validate(value: IonValue, issues: Violations) {
+    override fun validate(value: IonElement, issues: Violations) {
         if (!ionType.equals(value.type)) {
             issues.add(
                 Violation(
-                    ion, "type_mismatch",
+                    constraintField, "type_mismatch",
                     "expected type %s, found %s".format(
                         ionType.toString().toLowerCase(),
                         value.type.toString().toLowerCase()

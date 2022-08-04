@@ -15,6 +15,8 @@
 
 package com.amazon.ionschema.internal.constraint
 
+import com.amazon.ionelement.api.field
+import com.amazon.ionelement.api.loadSingleElement
 import com.amazon.ionschema.IonSchemaSystemBuilder
 import com.amazon.ionschema.Violations
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -29,9 +31,9 @@ class OrderedElementsTest {
     @ParameterizedTest(name = "ordered_elements:{0} should {1} {2}")
     @MethodSource("testCases")
     fun test(ionText: String, ignored: String, value: String, expectValid: Boolean) {
-        val constraint = OrderedElements(ION.singleValue(ionText), ISS.newSchema())
+        val constraint = OrderedElements(field("ordered_elements", loadSingleElement(ionText)), ISS.newSchema())
         val v = Violations()
-        constraint.validate(ION.singleValue(value), v, debug = true)
+        constraint.validate(loadSingleElement(value), v, debug = true)
         assertEquals(expectValid, v.isValid())
     }
 

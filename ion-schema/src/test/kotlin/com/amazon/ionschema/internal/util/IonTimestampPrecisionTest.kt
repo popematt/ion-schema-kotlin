@@ -15,8 +15,8 @@
 
 package com.amazon.ionschema.internal.util
 
-import com.amazon.ion.IonTimestamp
 import com.amazon.ion.system.IonSystemBuilder
+import com.amazon.ionelement.api.loadSingleElement
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.fail
 import org.junit.jupiter.api.Test
@@ -51,15 +51,15 @@ class IonTimestampPrecisionTest {
     private fun assert(expected: Int, value: String) {
         assertEquals(
             expected,
-            IonTimestampPrecision.toInt(ION.singleValue(value) as IonTimestamp)
+            IonTimestampPrecision.toInt(loadSingleElement(value).asTimestamp())
         )
     }
 
     private fun assertInvalid(value: String) {
         try {
-            IonTimestampPrecision.toInt(ION.singleValue(value) as IonTimestamp)
+            IonTimestampPrecision.toInt(loadSingleElement(value).asTimestamp())
             fail("Expected an exception from $value")
-        } catch (e: RuntimeException) {
+        } catch (t: Throwable) {
         }
     }
 }

@@ -15,8 +15,8 @@
 
 package com.amazon.ionschema.internal.constraint
 
-import com.amazon.ion.IonContainer
-import com.amazon.ion.IonValue
+import com.amazon.ionelement.api.ContainerElement
+import com.amazon.ionelement.api.StructField
 
 /**
  * Implements the container_length constraint.
@@ -24,11 +24,11 @@ import com.amazon.ion.IonValue
  * @see https://amzn.github.io/ion-schema/docs/spec.html#container_length
  */
 internal class ContainerLength(
-    ion: IonValue
-) : ConstraintBaseIntRange<IonContainer>(IonContainer::class.java, ion) {
+    ion: StructField
+) : ConstraintBaseIntRange<ContainerElement>(ContainerElement::class.java, ion) {
 
     override val violationCode = "invalid_container_length"
     override val violationMessage = "invalid container length %s, expected %s"
 
-    override fun getIntValue(value: IonContainer) = value.size()
+    override fun getIntValue(value: ContainerElement) = value.values.size
 }

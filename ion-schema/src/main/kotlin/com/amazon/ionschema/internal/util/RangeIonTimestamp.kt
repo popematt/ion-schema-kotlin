@@ -15,8 +15,11 @@
 
 package com.amazon.ionschema.internal.util
 
-import com.amazon.ion.IonList
-import com.amazon.ion.IonTimestamp
+import com.amazon.ion.Decimal
+import com.amazon.ionelement.api.ListElement
+import com.amazon.ionelement.api.TimestampElement
+import com.amazon.ionelement.api.ionDecimal
+import com.amazon.ionelement.api.ionListOf
 import com.amazon.ionschema.InvalidSchemaException
 
 /**
@@ -24,43 +27,40 @@ import com.amazon.ionschema.InvalidSchemaException
  */
 internal class RangeIonTimestamp private constructor (
     private val delegate: RangeBigDecimal
-) : Range<IonTimestamp> {
+) : Range<TimestampElement> {
 
-    constructor (ion: IonList) : this(toRangeBigDecimal(ion))
+    constructor (ion: ListElement) : this(toRangeBigDecimal(ion))
 
     companion object {
-        private fun toRangeBigDecimal(ion: IonList): RangeBigDecimal {
+        private fun toRangeBigDecimal(ion: ListElement): RangeBigDecimal {
             checkRange(ion)
 
             // convert to a decimal range
-            val newRange = ion.system.newEmptyList()
-            newRange.addTypeAnnotation("range")
-            ion.forEach { ionValue ->
-                val newValue = if (ionValue is IonTimestamp) {
-                    if (ionValue.localOffset == null) {
+            val newRangeBoundaries = ion.values.map { ionElement ->
+                val newValue = if (ionElement is TimestampElement) {
+                    if (ionElement.timestampValue.localOffset == null) {
                         throw InvalidSchemaException(
-                            "Timestamp range bound doesn't specify a local offset: $ionValue"
+                            "Timestamp range bound doesn't specify a local offset: $ionElement"
                         )
                     }
-                    ion.system.newDecimal(ionValue.decimalMillis)
+                    ionDecimal(Decimal.valueOf(ionElement.timestampValue.decimalMillis))
                 } else {
-                    ionValue.clone()
+                    ionElement
                 }
-                ionValue.typeAnnotations.forEach { newValue.addTypeAnnotation(it) }
-                newRange.add(newValue)
+                newValue.withAnnotations(ionElement.annotations)
             }
-
+            val newRange = ionListOf(newRangeBoundaries, annotations = listOf("range"))
             return RangeBigDecimal(newRange)
         }
     }
 
-    override fun contains(value: IonTimestamp): Boolean {
+    override fun contains(value: TimestampElement): Boolean {
         // ValidValues performs this same check and adds a Violation
         // instead of invoking this method;  this if is here purely
         // as a defensive safety check, and will ideally never be true
-        if (value.localOffset == null) {
-            throw IllegalArgumentException("Unable to compare timestamp with unknown local offset: $value")
-        }
-        return delegate.contains(value.decimalMillis)
+        return if (value.timestampValue.localOffset == null)
+            false
+        else
+            delegate.contains(value.timestampValue.decimalMillis)
     }
 }

@@ -15,18 +15,13 @@
 
 package com.amazon.ionschema.internal
 
-import com.amazon.ion.IonDatagram
-import com.amazon.ion.IonList
-import com.amazon.ion.IonStruct
-import com.amazon.ion.IonSymbol
-import com.amazon.ion.IonText
-import com.amazon.ion.IonValue
+import com.amazon.ionelement.api.*
 import com.amazon.ionschema.Import
 import com.amazon.ionschema.InvalidSchemaException
 import com.amazon.ionschema.Schema
 import com.amazon.ionschema.Type
 import com.amazon.ionschema.Violations
-import com.amazon.ionschema.internal.util.markReadOnly
+import com.amazon.ionschema.internal.util.DatagramElement
 
 /**
  * Implementation of [Schema] for all user-provided ISL.
@@ -34,7 +29,7 @@ import com.amazon.ionschema.internal.util.markReadOnly
 internal class SchemaImpl private constructor(
     private val schemaSystem: IonSchemaSystemImpl,
     private val schemaCore: SchemaCore,
-    schemaContent: Iterator<IonValue>,
+    schemaContent: Iterator<IonElement>,
     val schemaId: String?,
     preloadedImports: Map<String, Import>,
         /*
@@ -49,13 +44,13 @@ internal class SchemaImpl private constructor(
     internal constructor(
         schemaSystem: IonSchemaSystemImpl,
         schemaCore: SchemaCore,
-        schemaContent: Iterator<IonValue>,
+        schemaContent: Iterator<IonElement>,
         schemaId: String?
     ) : this(schemaSystem, schemaCore, schemaContent, schemaId, emptyMap(), mutableMapOf())
 
     private val deferredTypeReferences = mutableListOf<TypeReferenceDeferred>()
 
-    override val isl: IonDatagram
+    override val isl: DatagramElement
 
     private val imports: Map<String, Import>
 
@@ -66,7 +61,7 @@ internal class SchemaImpl private constructor(
     }
 
     init {
-        val dgIsl = schemaSystem.ionSystem.newDatagram()
+        val dgIsl = mutableListOf<AnyElement>()
 
         if (types.isEmpty()) {
             var foundHeader = false
@@ -74,22 +69,22 @@ internal class SchemaImpl private constructor(
             var importsMap = emptyMap<String, Import>()
 
             while (schemaContent.hasNext()) {
-                val it = schemaContent.next()
+                val it = schemaContent.next().asAnyElement()
 
-                dgIsl.add(it.clone())
+                dgIsl.add(it)
 
-                if (it is IonSymbol && ISL_VERSION_MARKER.matches(it.stringValue())) {
+                if (it is SymbolElement && ISL_VERSION_MARKER.matches(it.textValue)) {
                     // This implementation only supports Ion Schema 1.0
-                    if (it.stringValue() != "\$ion_schema_1_0") {
-                        throw InvalidSchemaException("Unsupported Ion Schema version: ${it.stringValue()}")
+                    if (it.textValue != "\$ion_schema_1_0") {
+                        throw InvalidSchemaException("Unsupported Ion Schema version: ${it.textValue}")
                     }
-                } else if (it.hasTypeAnnotation("schema_header")) {
-                    importsMap = loadHeader(types, it as IonStruct)
+                } else if ("schema_header" in it.annotations) {
+                    importsMap = loadHeader(types, it as StructElement)
                     foundHeader = true
-                } else if (!foundFooter && it.hasTypeAnnotation("type") && it is IonStruct) {
+                } else if (!foundFooter && "type" in it.annotations && it is StructElement) {
                     val newType = TypeImpl(it, this)
                     addType(types, newType)
-                } else if (it.hasTypeAnnotation("schema_footer")) {
+                } else if ("schema_footer" in it.annotations) {
                     foundFooter = true
                 }
             }
@@ -107,12 +102,12 @@ internal class SchemaImpl private constructor(
             // in this case the new Schema is based on an existing Schema and the 'types'
             // map was populated by the caller
             schemaContent.forEach {
-                dgIsl.add(it.clone())
+                dgIsl.add(it.asAnyElement())
             }
             imports = preloadedImports
         }
 
-        isl = dgIsl.markReadOnly()
+        isl = DatagramElement(dgIsl.toList())
         declaredTypes = types.values.filterIsInstance<TypeImpl>().associateBy { it.name }
 
         if (declaredTypes.isEmpty()) {
@@ -137,46 +132,47 @@ internal class SchemaImpl private constructor(
 
     private fun loadHeader(
         typeMap: MutableMap<String, Type>,
-        header: IonStruct
+        header: StructElement
     ): Map<String, Import> {
 
         val importsMap = mutableMapOf<String, SchemaAndTypeImports>()
         val importSet: MutableSet<String> = schemaSystem.getSchemaImportSet()
         val allowTransitiveImports = schemaSystem.getParam(IonSchemaSystemImpl.Param.ALLOW_TRANSITIVE_IMPORTS)
 
-        (header.get("imports") as? IonList)
-            ?.filterIsInstance<IonStruct>()
+        (header.takeIf { it.containsField("imports") }?.get("imports") as? ListElement)
+            ?.values
+            ?.filterIsInstance<StructElement>()
             ?.forEach {
-                val childImportId = it["id"] as IonText
-                val alias = it["as"] as? IonSymbol
+                val childImportId = it["id"] as TextElement
+                val alias = it.getOptional("as") as? SymbolElement
                 // if importSet has an import with this id then do not load schema again to break the cycle.
-                if (!importSet.contains(childImportId.stringValue())) {
+                if (!importSet.contains(childImportId.textValue)) {
                     var parentImportId = schemaId ?: ""
 
                     // if Schema is importing itself then throw error
-                    if (parentImportId.equals(childImportId.stringValue())) {
+                    if (parentImportId.equals(childImportId.textValue)) {
                         throw InvalidSchemaException("Schema can not import itself.")
                     }
 
                     // add parent and current schema to importSet and continue loading current schema
                     importSet.add(parentImportId)
-                    importSet.add(childImportId.stringValue())
-                    val importedSchema = schemaSystem.loadSchema(childImportId.stringValue())
-                    importSet.remove(childImportId.stringValue())
+                    importSet.add(childImportId.textValue)
+                    val importedSchema = schemaSystem.loadSchema(childImportId.textValue)
+                    importSet.remove(childImportId.textValue)
                     importSet.remove(parentImportId)
 
-                    val schemaAndTypes = importsMap.getOrPut(childImportId.stringValue()) {
-                        SchemaAndTypeImports(childImportId.stringValue(), importedSchema)
+                    val schemaAndTypes = importsMap.getOrPut(childImportId.textValue) {
+                        SchemaAndTypeImports(childImportId.textValue, importedSchema)
                     }
 
-                    val typeName = (it["type"] as? IonSymbol)?.stringValue()
+                    val typeName = (it.getOptional("type") as? SymbolElement)?.textValue
                     if (typeName != null) {
                         var importedType = importedSchema.getDeclaredType(typeName)
-                            ?.toImportedType(childImportId.stringValue())
+                            ?.toImportedType(childImportId.textValue)
 
                         if (importedType == null && allowTransitiveImports) {
                             importedType = importedSchema.getType(typeName)
-                                ?.toImportedType(childImportId.stringValue())
+                                ?.toImportedType(childImportId.textValue)
                                 ?.also { type ->
                                     schemaSystem.emitWarning {
                                         warnInvalidTransitiveImport(type, this.schemaId)
@@ -190,7 +186,7 @@ internal class SchemaImpl private constructor(
                             importedType = TypeAliased(alias, importedType)
                         }
                         addType(typeMap, importedType)
-                        schemaAndTypes.addType(alias?.stringValue() ?: typeName, importedType)
+                        schemaAndTypes.addType(alias?.textValue ?: typeName, importedType)
                     } else {
                         val typesToAdd =
                             if (allowTransitiveImports)
@@ -199,7 +195,7 @@ internal class SchemaImpl private constructor(
                                 importedSchema.getDeclaredTypes()
 
                         typesToAdd.asSequence()
-                            .map { type -> type.toImportedType(childImportId.stringValue()) }
+                            .map { type -> type.toImportedType(childImportId.textValue) }
                             .forEach { type ->
                                 addType(typeMap, type)
                                 schemaAndTypes.addType(type.name, type)
@@ -218,8 +214,8 @@ internal class SchemaImpl private constructor(
 
     private fun validateType(type: Type) {
         if (!schemaSystem.getParam(IonSchemaSystemImpl.Param.ALLOW_ANONYMOUS_TOP_LEVEL_TYPES)) {
-            val name = (type.isl as IonStruct)["name"]
-            if (name == null || name.isNullValue) {
+            val name = (type.isl as StructElement).takeIf { it.containsField("name") }?.get("name")
+            if (name == null || name.isNull) {
                 throw InvalidSchemaException(
                     "Top-level types of a schema must have a name ($type.isl)"
                 )
@@ -256,10 +252,10 @@ internal class SchemaImpl private constructor(
             .iterator()
 
     override fun newType(isl: String) = newType(
-        schemaSystem.ionSystem.singleValue(isl) as IonStruct
+        loadSingleElement(isl) as StructElement
     )
 
-    override fun newType(isl: IonStruct): Type {
+    override fun newType(isl: StructElement): Type {
         val type = TypeImpl(isl, this)
         resolveDeferredTypeReferences()
         return type
@@ -269,28 +265,28 @@ internal class SchemaImpl private constructor(
         validateType(type)
 
         // prepare ISL corresponding to the new Schema
-        // (might be simpler if IonDatagram.set(int, IonValue) were implemented,
+        // (might be simpler if IonDatagram.set(int, IonElement) were implemented,
         // see https://github.com/amzn/ion-java/issues/50)
-        val newIsl = schemaSystem.ionSystem.newDatagram()
+        val newIsl = mutableListOf<IonElement>()
         var newTypeAdded = false
         isl.forEachIndexed { idx, value ->
             if (!newTypeAdded) {
                 when {
-                    value is IonStruct
-                        && (value["name"] as? IonSymbol)?.stringValue().equals(type.name) -> {
+                    value is StructElement
+                        && (value.getOptional("name") as? SymbolElement)?.textValue.equals(type.name) -> {
                         // new type replaces existing type of the same name
-                        newIsl.add(type.isl.clone())
+                        newIsl.add(type.isl)
                         newTypeAdded = true
                         return@forEachIndexed
                     }
-                    (value is IonStruct && value.hasTypeAnnotation("schema_footer"))
+                    (value is StructElement && "schema_footer" in value.annotations)
                         || idx == isl.lastIndex -> {
-                        newIsl.add(type.isl.clone())
+                        newIsl.add(type.isl)
                         newTypeAdded = true
                     }
                 }
             }
-            newIsl.add(value.clone())
+            newIsl.add(value)
         }
 
         // clone the types map:
@@ -324,7 +320,7 @@ internal class SchemaImpl private constructor(
     private fun Type.toImportedType(importedFromSchemaId: String): ImportedType {
         this@toImportedType as TypeInternal
         return object : ImportedType, TypeInternal by this {
-            override fun validate(value: IonValue, issues: Violations) {
+            override fun validate(value: IonElement, issues: Violations) {
                 if (importedFromSchemaId != schemaId) {
                     schemaSystem.emitWarning {
                         warnInvalidTransitiveImport(this, this@SchemaImpl.schemaId)

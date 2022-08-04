@@ -1,8 +1,10 @@
 package com.amazon.ionschema
 
+import com.amazon.ion.IonSystem
 import com.amazon.ion.IonValue
+import com.amazon.ion.system.IonSystemBuilder
+import com.amazon.ionelement.api.*
 import com.amazon.ionschema.util.CloseableIterator
-import java.io.Closeable
 import java.io.File
 import java.io.InputStream
 
@@ -16,22 +18,24 @@ import java.io.InputStream
  */
 class ResourceAuthority(
     private val rootPackage: String,
-    private val classLoader: ClassLoader
+    private val classLoader: ClassLoader,
+    private val loader: IonElementLoader = DEFAULT_LOADER,
+    private val ion: IonSystem = DEFAULT_ION_SYSTEM,
 ) : Authority {
 
-    override fun iteratorFor(iss: IonSchemaSystem, id: String): CloseableIterator<IonValue> {
+    override fun sequenceFor(id: String): CloseableSequence<IonElement>? {
         val resourcePath = File(rootPackage, id).toPath().normalize().toString()
         if (!resourcePath.startsWith(rootPackage)) {
             throw AccessDeniedException(File(id))
         }
-        val stream: InputStream = classLoader.getResourceAsStream(resourcePath) ?: return EMPTY_ITERATOR
-
-        val ion = iss.ionSystem
+        val stream: InputStream = classLoader.getResourceAsStream(resourcePath) ?: return null
         val reader = ion.newReader(stream)
 
-        return object : CloseableIterator<IonValue>, Iterator<IonValue> by ion.iterate(reader), Closeable by reader {
-            // Intentionally empty body because this object has all its methods implemented by delegation.
-        }
+        return loader.loadAllElements(reader).toCloseableSequence()
+    }
+
+    override fun iteratorFor(iss: IonSchemaSystem, id: String): CloseableIterator<IonValue> {
+        return sequenceFor(id)?.use { it.map { it.toIonValue(iss.ionSystem) } }?.iterator()?.asCloseableIterator() ?: EMPTY_ITERATOR
     }
 
     companion object {
@@ -41,5 +45,8 @@ class ResourceAuthority(
          */
         @JvmStatic
         fun forIonSchemaSchemas(): ResourceAuthority = ResourceAuthority("ion-schema-schemas", ResourceAuthority::class.java.classLoader)
+
+        private val DEFAULT_LOADER = createIonElementLoader(IonElementLoaderOptions(includeLocationMeta = true))
+        private val DEFAULT_ION_SYSTEM = IonSystemBuilder.standard().build()
     }
 }

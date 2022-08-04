@@ -15,7 +15,9 @@
 
 package com.amazon.ionschema.internal.constraint
 
-import com.amazon.ion.IonValue
+import com.amazon.ionelement.api.IonElement
+import com.amazon.ionelement.api.StructField
+import com.amazon.ionelement.api.field
 import com.amazon.ionschema.Violations
 import com.amazon.ionschema.internal.CommonViolations
 import com.amazon.ionschema.internal.Constraint
@@ -24,18 +26,21 @@ import com.amazon.ionschema.internal.Constraint
  * Base class for constraint implementations.
  */
 internal abstract class ConstraintBase(
-    val ion: IonValue
+    val constraintField: StructField,
 ) : Constraint {
 
-    override val name = ion.fieldName
+    constructor(name: String, value: IonElement) : this(field(name, value))
 
-    internal inline fun <reified T> validateAs(value: IonValue, issues: Violations, noinline customValidation: (T) -> Unit) =
+    override val name = constraintField.name
+    val ion = constraintField.value
+
+    internal inline fun <reified T> validateAs(value: IonElement, issues: Violations, noinline customValidation: (T) -> Unit) =
         validateAs(T::class.java, value, issues, customValidation)
 
-    internal fun <T> validateAs(expectedClass: Class<T>, value: IonValue, issues: Violations, customValidation: (T) -> Unit) {
+    internal fun <T> validateAs(expectedClass: Class<T>, value: IonElement, issues: Violations, customValidation: (T) -> Unit) {
         when {
-            !expectedClass.isInstance(value) -> issues.add(CommonViolations.INVALID_TYPE(ion, value))
-            value.isNullValue -> issues.add(CommonViolations.NULL_VALUE(ion))
+            !expectedClass.isInstance(value) -> issues.add(CommonViolations.INVALID_TYPE(constraintField, value))
+            value.isNull -> issues.add(CommonViolations.NULL_VALUE(constraintField))
             else ->
                 @Suppress("UNCHECKED_CAST")
                 customValidation(value as T)

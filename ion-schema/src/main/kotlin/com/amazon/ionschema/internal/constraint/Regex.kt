@@ -15,9 +15,7 @@
 
 package com.amazon.ionschema.internal.constraint
 
-import com.amazon.ion.IonString
-import com.amazon.ion.IonText
-import com.amazon.ion.IonValue
+import com.amazon.ionelement.api.*
 import com.amazon.ionschema.InvalidSchemaException
 import com.amazon.ionschema.Violation
 import com.amazon.ionschema.Violations
@@ -34,18 +32,19 @@ import java.util.regex.Pattern
  * @see java.util.regex.Pattern
  */
 internal class Regex(
-    ion: IonValue
-) : ConstraintBase(ion) {
+    field: StructField
+) : ConstraintBase(field) {
 
     private val pattern: Pattern
 
     init {
-        if (ion !is IonString || ion.isNullValue) {
+        val ion = field.value
+        if (ion !is StringElement || ion.isNull) {
             throw InvalidSchemaException("Invalid regex constraint: $ion")
         }
 
         var flags = 0
-        ion.typeAnnotations.forEach {
+        ion.annotations.forEach {
             val flag = when (it) {
                 "i" -> Pattern.CASE_INSENSITIVE
                 "m" -> Pattern.MULTILINE
@@ -56,16 +55,16 @@ internal class Regex(
             flags = flags.or(flag)
         }
 
-        pattern = toPattern(ion.stringValue(), flags)
+        pattern = toPattern(ion.textValue, flags)
     }
 
-    override fun validate(value: IonValue, issues: Violations) {
-        validateAs<IonText>(value, issues) { v ->
-            if (!pattern.matcher(v.stringValue()).find()) {
+    override fun validate(value: IonElement, issues: Violations) {
+        validateAs<TextElement>(value, issues) { v ->
+            if (!pattern.matcher(v.textValue).find()) {
                 issues.add(
                     Violation(
-                        ion, "regex_mismatch",
-                        "'${v.stringValue()}' doesn't match regex '${pattern.pattern()}'"
+                        constraintField, "regex_mismatch",
+                        "'${v.textValue}' doesn't match regex '${pattern.pattern()}'"
                     )
                 )
             }

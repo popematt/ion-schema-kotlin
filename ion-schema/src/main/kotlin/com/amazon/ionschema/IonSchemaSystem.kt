@@ -17,6 +17,7 @@ package com.amazon.ionschema
 
 import com.amazon.ion.IonSystem
 import com.amazon.ion.IonValue
+import com.amazon.ionelement.api.IonElement
 
 /**
  * Provides methods for instantiating instances of [Schema].
@@ -35,6 +36,9 @@ interface IonSchemaSystem {
      * This property is an implementation detail, but it is intentionally
      * exposed so that consumers of this library can conveniently ensure
      * they are using the same `IonSystem` instance as the `IonSchemaSystem`.
+     *
+     * This property exists for backwards compatibility since IonSchemaSystem
+     * no longer uses the IonValue DOM.
      */
     val ionSystem: IonSystem
 
@@ -73,4 +77,12 @@ interface IonSchemaSystem {
      * @return the new schema
      */
     fun newSchema(isl: Iterator<IonValue>): Schema
+
+    /**
+     * Constructs a new schema using ISL provided as Iterator<IonElement>.
+     *
+     * @param[isl] Iterator<IonElement> representing the desired schema
+     * @return the new schema
+     */
+    fun newSchema(isl: Iterable<IonElement>): Schema
 }

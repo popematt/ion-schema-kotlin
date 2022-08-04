@@ -15,8 +15,8 @@
 
 package com.amazon.ionschema.internal.constraint
 
-import com.amazon.ion.IonText
-import com.amazon.ion.IonValue
+import com.amazon.ionelement.api.StructField
+import com.amazon.ionelement.api.TextElement
 
 /**
  * Implements the codepoint_length constraint.
@@ -24,11 +24,11 @@ import com.amazon.ion.IonValue
  * @see https://amzn.github.io/ion-schema/docs/spec.html#codepoint_length
  */
 internal class CodepointLength(
-    ion: IonValue
-) : ConstraintBaseIntRange<IonText>(IonText::class.java, ion) {
+    ion: StructField
+) : ConstraintBaseIntRange<TextElement>(TextElement::class.java, ion) {
 
     override val violationCode = "invalid_codepoint_length"
     override val violationMessage = "invalid codepoint length %s, expected %s"
 
-    override fun getIntValue(value: IonText) = value.stringValue().let { it.codePointCount(0, it.length) }
+    override fun getIntValue(value: TextElement) = value.textValue.let { it.codePointCount(0, it.length) }
 }

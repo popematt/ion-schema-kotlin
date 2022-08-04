@@ -18,6 +18,7 @@ package com.amazon.ionschema
 import com.amazon.ion.IonString
 import com.amazon.ion.IonValue
 import com.amazon.ion.system.IonSystemBuilder
+import com.amazon.ionelement.api.toIonElement
 
 internal val ION = IonSystemBuilder.standard().build()
 
@@ -27,3 +28,5 @@ internal fun prepareValue(ion: IonValue) =
     } else {
         ion
     }
+
+internal fun Iterable<IonValue>.toIonElements() = this.map { it.toIonElement() }

@@ -15,8 +15,8 @@
 
 package com.amazon.ionschema.internal.constraint
 
-import com.amazon.ion.IonDecimal
-import com.amazon.ion.IonValue
+import com.amazon.ionelement.api.DecimalElement
+import com.amazon.ionelement.api.StructField
 
 /**
  * Implements the scale constraint.
@@ -24,11 +24,11 @@ import com.amazon.ion.IonValue
  * @see https://amzn.github.io/ion-schema/docs/spec.html#scale
  */
 internal class Scale(
-    ion: IonValue
-) : ConstraintBaseIntRange<IonDecimal>(IonDecimal::class.java, ion) {
+    ion: StructField
+) : ConstraintBaseIntRange<DecimalElement>(DecimalElement::class.java, ion) {
 
     override val violationCode = "invalid_scale"
     override val violationMessage = "invalid scale %s, expected %s"
 
-    override fun getIntValue(value: IonDecimal) = value.bigDecimalValue().scale()
+    override fun getIntValue(value: DecimalElement) = value.decimalValue.scale()
 }

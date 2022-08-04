@@ -15,11 +15,7 @@
 
 package com.amazon.ionschema.internal.util
 
-import com.amazon.ion.IonDecimal
-import com.amazon.ion.IonFloat
-import com.amazon.ion.IonInt
-import com.amazon.ion.IonList
-import com.amazon.ion.IonValue
+import com.amazon.ionelement.api.*
 import com.amazon.ionschema.InvalidSchemaException
 import java.math.BigDecimal
 
@@ -27,16 +23,16 @@ import java.math.BigDecimal
  * Implementation of Range<BigDecimal>.  As of this writing, all other Range<T>
  * implementations directly or indirectly delegate to an instance of this class.
  */
-internal class RangeBigDecimal(private val ion: IonList) : Range<BigDecimal> {
+internal class RangeBigDecimal(private val ion: ListElement) : Range<BigDecimal> {
     companion object {
-        private fun toBigDecimal(ion: IonValue) =
-            if (ion.isNullValue) {
+        private fun toBigDecimal(ion: IonElement) =
+            if (ion.isNull) {
                 throw InvalidSchemaException("Unable to convert $ion to BigDecimal")
             } else {
                 when (ion) {
-                    is IonDecimal -> ion.bigDecimalValue()
-                    is IonFloat -> ion.bigDecimalValue()
-                    is IonInt -> BigDecimal(ion.bigIntegerValue())
+                    is DecimalElement -> ion.decimalValue
+                    is FloatElement -> ion.doubleValue.toBigDecimal()
+                    is IntElement -> ion.bigIntegerValue.toBigDecimal()
                     else ->
                         throw InvalidSchemaException(
                             "Expected range lower/upper to be a decimal, float, or int (was $ion)"
@@ -85,11 +81,11 @@ internal class RangeBigDecimal(private val ion: IonList) : Range<BigDecimal> {
     /**
      * Represents either a lower or upper boundary of a range.
      */
-    internal class Boundary(ion: IonValue?, private val infinity: Infinity) : Comparable<Boundary> {
+    internal class Boundary(ion: IonElement?, private val infinity: Infinity) : Comparable<Boundary> {
         internal val value: BigDecimal?
         internal val boundaryType: RangeBoundaryType
         init {
-            value = if (ion == null || ion.isNullValue) {
+            value = if (ion == null || ion.isNull) {
                 boundaryType = RangeBoundaryType.INCLUSIVE
                 null
             } else {

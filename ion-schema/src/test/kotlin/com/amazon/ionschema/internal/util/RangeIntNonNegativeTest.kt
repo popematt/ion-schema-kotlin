@@ -15,13 +15,13 @@
 
 package com.amazon.ionschema.internal.util
 
-import com.amazon.ion.IonList
+import com.amazon.ionelement.api.ListElement
 import org.junit.jupiter.api.Test
 
-internal class RangeIntNonNegativeTest : AbstractRangeTest(RangeType.INT_NON_NEGATIVE) {
+internal class RangeIntNonNegativeTest : AbstractRangeTest<Int>(RangeType.INT_NON_NEGATIVE) {
 
-    @Suppress("UNCHECKED_CAST")
-    override fun <T : Any> rangeOf(ion: IonList) = RangeFactory.rangeOf<Int>(ion, RangeType.INT_NON_NEGATIVE) as Range<T>
+    // @Suppress("UNCHECKED_CAST")
+    override fun rangeOf(ion: ListElement) = RangeFactory.rangeOf<Int>(ion, RangeType.INT_NON_NEGATIVE)
 
     @Test
     fun range_int_inclusive() {

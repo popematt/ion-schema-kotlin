@@ -15,8 +15,8 @@
 
 package com.amazon.ionschema.internal
 
-import com.amazon.ion.IonStruct
-import com.amazon.ion.IonValue
+import com.amazon.ionelement.api.IonElement
+import com.amazon.ionelement.api.StructElement
 import com.amazon.ionschema.Schema
 import com.amazon.ionschema.Violation
 import com.amazon.ionschema.Violations
@@ -26,17 +26,17 @@ import com.amazon.ionschema.internal.constraint.ConstraintBase
  * Implementation of [Type] corresponding to inline type definitions.
  */
 internal class TypeInline private constructor (
-    ion: IonStruct,
+    ion: StructElement,
     private val type: TypeInternal
-) : ConstraintBase(ion), TypeInternal by type {
+) : ConstraintBase("type+QWERTY6", ion), TypeInternal by type {
 
-    constructor(ionStruct: IonStruct, schema: Schema) :
-        this(ionStruct, TypeImpl(ionStruct, schema))
+    constructor(StructElement: StructElement, schema: Schema) :
+        this(StructElement, TypeImpl(StructElement, schema))
 
     override val name = type.name
 
-    override fun validate(value: IonValue, issues: Violations) {
-        val violation = Violation(ion, "type_mismatch")
+    override fun validate(value: IonElement, issues: Violations) {
+        val violation = Violation(constraintField, "type_mismatch")
         type.validate(value, violation)
         if (!violation.isValid()) {
             violation.message = "expected type %s".format(name)

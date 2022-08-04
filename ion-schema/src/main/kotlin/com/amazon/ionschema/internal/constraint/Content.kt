@@ -15,8 +15,9 @@
 
 package com.amazon.ionschema.internal.constraint
 
-import com.amazon.ion.IonSymbol
-import com.amazon.ion.IonValue
+import com.amazon.ionelement.api.IonElement
+import com.amazon.ionelement.api.StructField
+import com.amazon.ionelement.api.ionSymbol
 import com.amazon.ionschema.InvalidSchemaException
 import com.amazon.ionschema.Violations
 
@@ -29,20 +30,19 @@ import com.amazon.ionschema.Violations
  *
  * @see https://amzn.github.io/ion-schema/docs/spec.html#content
  */
-internal class Content(ion: IonValue) : ConstraintBase(ion) {
+internal class Content(ion: StructField) : ConstraintBase(ion) {
+
+    companion object {
+        private val THE_ONLY_ALLOWED_VALUE = ionSymbol("closed")
+    }
 
     init {
-        if (!(
-            ion is IonSymbol &&
-                !ion.isNullValue &&
-                ion.stringValue() == "closed"
-            )
-        ) {
+        if (ion.value != THE_ONLY_ALLOWED_VALUE) {
             throw InvalidSchemaException("Invalid content constraint: $ion")
         }
     }
 
-    override fun validate(value: IonValue, issues: Violations) {
+    override fun validate(value: IonElement, issues: Violations) {
         // no-op, validation logic for this constraint is performed by the fields constraint
     }
 }

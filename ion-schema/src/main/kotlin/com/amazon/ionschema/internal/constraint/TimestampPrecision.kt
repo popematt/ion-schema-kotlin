@@ -15,8 +15,9 @@
 
 package com.amazon.ionschema.internal.constraint
 
-import com.amazon.ion.IonTimestamp
-import com.amazon.ion.IonValue
+import com.amazon.ionelement.api.IonElement
+import com.amazon.ionelement.api.StructField
+import com.amazon.ionelement.api.TimestampElement
 import com.amazon.ionschema.Violation
 import com.amazon.ionschema.Violations
 import com.amazon.ionschema.internal.util.IonTimestampPrecision
@@ -29,18 +30,18 @@ import com.amazon.ionschema.internal.util.RangeType
  * @see https://amzn.github.io/ion-schema/docs/spec.html#timestamp_precision
  */
 internal class TimestampPrecision(
-    ion: IonValue
+    ion: StructField
 ) : ConstraintBase(ion) {
 
-    private val range = RangeFactory.rangeOf<IonTimestamp>(ion, RangeType.ION_TIMESTAMP_PRECISION)
+    private val range = RangeFactory.rangeOf<TimestampElement>(ion.value, RangeType.ION_TIMESTAMP_PRECISION)
 
-    override fun validate(value: IonValue, issues: Violations) {
-        validateAs<IonTimestamp>(value, issues) { v ->
+    override fun validate(value: IonElement, issues: Violations) {
+        validateAs<TimestampElement>(value, issues) { v ->
             if (!range.contains(v)) {
                 val actualPrecision = IonTimestampPrecision.toInt(v)
                 issues.add(
                     Violation(
-                        ion, "invalid_timestamp_precision",
+                        constraintField, "invalid_timestamp_precision",
                         "invalid timestamp precision %s, expected %s".format(actualPrecision, ion)
                     )
                 )

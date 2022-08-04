@@ -15,38 +15,34 @@
 
 package com.amazon.ionschema.internal.util
 
-import com.amazon.ion.IonDecimal
-import com.amazon.ion.IonFloat
-import com.amazon.ion.IonInt
-import com.amazon.ion.IonList
-import com.amazon.ion.IonValue
+import com.amazon.ionelement.api.*
 import java.math.BigDecimal
 
 /**
- * Implementation of Range<IonValue> restricted to IonDecimal, IonFloat,
+ * Implementation of Range<IonElement> restricted to IonDecimal, IonFloat,
  * and IonInt (numeric) values.  Mostly delegates to RangeBigDecimal.
  */
 internal class RangeIonNumber private constructor (
     private val delegate: RangeBigDecimal
-) : Range<IonValue> {
+) : Range<IonElement> {
 
-    constructor (ion: IonList) : this(RangeBigDecimal(ion))
+    constructor (ion: ListElement) : this(RangeBigDecimal(ion))
 
     companion object {
-        private fun toBigDecimal(ion: IonValue) =
-            if (ion.isNullValue) {
+        private fun toBigDecimal(ion: IonElement) =
+            if (ion.isNull) {
                 null
             } else {
                 when (ion) {
-                    is IonDecimal -> ion.bigDecimalValue()
-                    is IonFloat -> ion.bigDecimalValue()
-                    is IonInt -> BigDecimal(ion.bigIntegerValue())
+                    is DecimalElement -> ion.decimalValue
+                    is FloatElement -> ion.doubleValue.toBigDecimal()
+                    is IntElement -> BigDecimal(ion.bigIntegerValue)
                     else -> null
                 }
             }
     }
 
-    override fun contains(value: IonValue): Boolean {
+    override fun contains(value: IonElement): Boolean {
         val bdValue = toBigDecimal(value)
         return if (bdValue != null) {
             delegate.contains(bdValue)

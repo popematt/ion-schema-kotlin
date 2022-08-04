@@ -15,8 +15,10 @@
 
 package com.amazon.ionschema
 
-import com.amazon.ion.IonDatagram
 import com.amazon.ion.IonStruct
+import com.amazon.ionelement.api.IonElement
+import com.amazon.ionelement.api.StructElement
+import com.amazon.ionelement.api.toIonElement
 
 /**
  * A Schema is a collection of zero or more [Type]s.
@@ -37,7 +39,7 @@ interface Schema {
     /**
      * A read-only view of the ISL for this schema.
      */
-    val isl: IonDatagram
+    val isl: List<IonElement>
 
     /**
      * Returns an Import representing all the types imported from
@@ -90,12 +92,13 @@ interface Schema {
     fun newType(isl: String): Type
 
     /**
-     * Constructs a new type using the type ISL provided as an IonStruct.
+     * Constructs a new type using the type ISL provided as an StructElement.
      *
-     * @param[isl] IonStruct representing the desired type
+     * @param[isl] StructElement representing the desired type
      * @return the new type
      */
-    fun newType(isl: IonStruct): Type
+    fun newType(isl: StructElement): Type
+    fun newType(isl: IonStruct): Type = newType(isl.toIonElement().asStruct())
 
     /**
      * Returns a new Schema instance containing all the types of this

@@ -15,7 +15,7 @@
 
 package com.amazon.ionschema.internal
 
-import com.amazon.ion.IonValue
+import com.amazon.ionelement.api.IonElement
 import com.amazon.ionschema.Type
 
 /**
@@ -30,7 +30,7 @@ internal interface TypeInternal : Type, Constraint {
 
     fun getBaseType(): TypeBuiltin
 
-    fun isValidForBaseType(value: IonValue): Boolean
+    fun isValidForBaseType(value: IonElement): Boolean
 }
 
 /**

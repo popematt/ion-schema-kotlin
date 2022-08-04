@@ -15,14 +15,15 @@
 
 package com.amazon.ionschema.internal
 
-import com.amazon.ion.IonDatagram
-import com.amazon.ion.IonStruct
-import com.amazon.ion.IonSymbol
+import com.amazon.ionelement.api.StructElement
+import com.amazon.ionelement.api.SymbolElement
+import com.amazon.ionelement.api.loadAllElements
 import com.amazon.ionschema.Import
 import com.amazon.ionschema.IonSchemaSystem
 import com.amazon.ionschema.Schema
 import com.amazon.ionschema.Type
-import com.amazon.ionschema.internal.util.markReadOnly
+import com.amazon.ionschema.internal.util.DatagramElement
+import com.amazon.ionschema.internal.util.ionDatagramOf
 
 /**
  * Provides instances of [Type] for all of the Core Types and Ion Types
@@ -34,28 +35,27 @@ internal class SchemaCore(
 
     private val typeMap: Map<String, Type>
 
-    override val isl: IonDatagram
+    override val isl: DatagramElement
 
     init {
-        val ION = schemaSystem.ionSystem
-        typeMap = ION.iterate(CORE_TYPES + ION_TYPES)
+        typeMap = loadAllElements(CORE_TYPES + ION_TYPES)
             .asSequence()
-            .map { (it as IonStruct).first() as IonSymbol }
-            .associateBy({ it.stringValue() }, { newType(it) })
+            .map { (it as StructElement).fields.first().value as SymbolElement }
+            .associateBy({ it.textValue }, { newType(it) })
             .toMutableMap()
 
-        ION.iterate(ADDITIONAL_TYPE_DEFS)
+        loadAllElements(ADDITIONAL_TYPE_DEFS)
             .asSequence()
-            .map { (it as IonStruct).first() }
+            .map { (it as StructElement).fields.first() }
             .forEach {
-                typeMap.put(it.fieldName, TypeBuiltinImpl(it as IonStruct, this))
+                typeMap.put(it.name, TypeBuiltinImpl(it.value as StructElement, this))
             }
 
-        isl = ION.newDatagram().markReadOnly()
+        isl = ionDatagramOf(emptyList())
     }
 
-    private fun newType(name: IonSymbol): Type =
-        if (name.stringValue().startsWith("\$")) {
+    private fun newType(name: SymbolElement): Type =
+        if (name.textValue.startsWith("\$")) {
             TypeIon(name)
         } else {
             TypeCore(name)
@@ -76,7 +76,7 @@ internal class SchemaCore(
     override fun getSchemaSystem() = schemaSystem
 
     override fun newType(isl: String) = throw UnsupportedOperationException()
-    override fun newType(isl: IonStruct) = throw UnsupportedOperationException()
+    override fun newType(isl: StructElement) = throw UnsupportedOperationException()
     override fun plusType(type: Type) = throw UnsupportedOperationException()
 }
 

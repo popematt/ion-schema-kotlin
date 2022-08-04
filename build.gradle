@@ -31,6 +31,11 @@ plugins {
 
 allprojects {
 
+    repositories {
+        // Required to download KtLint
+        mavenCentral()
+    }
+
     apply plugin: "org.jlleitschuh.gradle.ktlint"
     ktlint {
         outputToConsole = true

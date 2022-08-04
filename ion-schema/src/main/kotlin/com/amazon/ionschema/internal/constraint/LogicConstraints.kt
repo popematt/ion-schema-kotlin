@@ -15,8 +15,9 @@
 
 package com.amazon.ionschema.internal.constraint
 
-import com.amazon.ion.IonList
-import com.amazon.ion.IonValue
+import com.amazon.ionelement.api.IonElement
+import com.amazon.ionelement.api.ListElement
+import com.amazon.ionelement.api.StructField
 import com.amazon.ionschema.InvalidSchemaException
 import com.amazon.ionschema.Schema
 import com.amazon.ionschema.Type
@@ -30,17 +31,19 @@ import com.amazon.ionschema.internal.TypeReference
  * @see https://amzn.github.io/ion-schema/docs/spec.html#logic-constraints
  */
 internal abstract class LogicConstraints(
-    ion: IonValue,
+    ion: StructField,
     schema: Schema
 ) : ConstraintBase(ion) {
 
-    internal val types = if (ion is IonList && !ion.isNullValue) {
-        ion.map { TypeReference.create(it, schema) }
-    } else {
-        throw InvalidSchemaException("Expected a list, found: $ion")
+    internal val types = ion.value.let {
+        if (it is ListElement && !it.isNull) {
+            it.values.map { t -> TypeReference.create(t, schema) }
+        } else {
+            throw InvalidSchemaException("Expected a list, found: $ion")
+        }
     }
 
-    internal fun validateTypes(value: IonValue, issues: Violations): List<Type> {
+    internal fun validateTypes(value: IonElement, issues: Violations): List<Type> {
         val validTypes = mutableListOf<Type>()
         types.forEach {
             val checkpoint = issues.checkpoint()
@@ -58,9 +61,9 @@ internal abstract class LogicConstraints(
  *
  * @see https://amzn.github.io/ion-schema/docs/spec.html#all_of
  */
-internal class AllOf(ion: IonValue, schema: Schema) : LogicConstraints(ion, schema) {
-    override fun validate(value: IonValue, issues: Violations) {
-        val allOfViolation = Violation(ion, "all_types_not_matched")
+internal class AllOf(ion: StructField, schema: Schema) : LogicConstraints(ion, schema) {
+    override fun validate(value: IonElement, issues: Violations) {
+        val allOfViolation = Violation(constraintField, "all_types_not_matched")
         val count = validateTypes(value, allOfViolation).size
         if (count != types.size) {
             allOfViolation.message = "value matches $count types, expected ${types.size}"
@@ -74,9 +77,9 @@ internal class AllOf(ion: IonValue, schema: Schema) : LogicConstraints(ion, sche
  *
  * @see https://amzn.github.io/ion-schema/docs/spec.html#any_of
  */
-internal class AnyOf(ion: IonValue, schema: Schema) : LogicConstraints(ion, schema) {
-    override fun validate(value: IonValue, issues: Violations) {
-        val anyOfViolation = Violation(ion, "no_types_matched", "value matches none of the types")
+internal class AnyOf(ion: StructField, schema: Schema) : LogicConstraints(ion, schema) {
+    override fun validate(value: IonElement, issues: Violations) {
+        val anyOfViolation = Violation(constraintField, "no_types_matched", "value matches none of the types")
         types.forEach {
             val checkpoint = anyOfViolation.checkpoint()
             it().validate(value, anyOfViolation)
@@ -92,9 +95,9 @@ internal class AnyOf(ion: IonValue, schema: Schema) : LogicConstraints(ion, sche
  *
  * @see https://amzn.github.io/ion-schema/docs/spec.html#one_of
  */
-internal class OneOf(ion: IonValue, schema: Schema) : LogicConstraints(ion, schema) {
-    override fun validate(value: IonValue, issues: Violations) {
-        val oneOfViolation = Violation(ion)
+internal class OneOf(ion: StructField, schema: Schema) : LogicConstraints(ion, schema) {
+    override fun validate(value: IonElement, issues: Violations) {
+        val oneOfViolation = Violation(constraintField)
         val validTypes = validateTypes(value, oneOfViolation)
         if (validTypes.size != 1) {
             if (validTypes.size == 0) {
@@ -106,7 +109,7 @@ internal class OneOf(ion: IonValue, schema: Schema) : LogicConstraints(ion, sche
                 oneOfViolation.message = "value matches %s types, expected 1".format(validTypes.size)
 
                 validTypes.forEach {
-                    val typeDef = (it as ConstraintBase).ion
+                    val typeDef = (it as ConstraintBase).constraintField
                     oneOfViolation.add(
                         Violation(
                             typeDef, "type_matched",
@@ -125,11 +128,11 @@ internal class OneOf(ion: IonValue, schema: Schema) : LogicConstraints(ion, sche
  *
  * @see https://amzn.github.io/ion-schema/docs/spec.html#not
  */
-internal class Not(ion: IonValue, schema: Schema) : ConstraintBase(ion) {
-    private val type = TypeReference.create(ion, schema)
+internal class Not(ion: StructField, schema: Schema) : ConstraintBase(ion) {
+    private val type = TypeReference.create(ion.value, schema)
 
-    override fun validate(value: IonValue, issues: Violations) {
-        val child = Violation(ion, "type_matched", "value unexpectedly matches type")
+    override fun validate(value: IonElement, issues: Violations) {
+        val child = Violation(constraintField, "type_matched", "value unexpectedly matches type")
         type().validate(value, child)
         if (child.isValid()) {
             issues.add(child)

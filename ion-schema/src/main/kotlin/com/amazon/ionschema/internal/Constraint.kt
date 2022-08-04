@@ -15,7 +15,7 @@
 
 package com.amazon.ionschema.internal
 
-import com.amazon.ion.IonValue
+import com.amazon.ionelement.api.IonElement
 import com.amazon.ionschema.Violations
 
 /**
@@ -32,5 +32,5 @@ internal interface Constraint {
      * adding [Violation]s and/or [ViolationChild]ren to issues
      * if the constraint is violated.
      */
-    fun validate(value: IonValue, issues: Violations)
+    fun validate(value: IonElement, issues: Violations)
 }

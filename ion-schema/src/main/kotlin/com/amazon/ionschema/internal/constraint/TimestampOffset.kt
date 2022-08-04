@@ -15,10 +15,7 @@
 
 package com.amazon.ionschema.internal.constraint
 
-import com.amazon.ion.IonList
-import com.amazon.ion.IonString
-import com.amazon.ion.IonTimestamp
-import com.amazon.ion.IonValue
+import com.amazon.ionelement.api.*
 import com.amazon.ionschema.InvalidSchemaException
 import com.amazon.ionschema.Violation
 import com.amazon.ionschema.Violations
@@ -29,8 +26,8 @@ import com.amazon.ionschema.Violations
  * @see https://amzn.github.io/ion-schema/docs/spec.html#timestamp_offset
  */
 internal class TimestampOffset(
-    ion: IonValue
-) : ConstraintBase(ion) {
+    field: StructField
+) : ConstraintBase(field) {
 
     companion object {
         private val VALID_HOUR_RANGE = IntRange(0, 23)
@@ -45,23 +42,24 @@ internal class TimestampOffset(
     private val validOffsets: Set<Int?>
 
     init {
-        if (ion !is IonList) {
+        val ion = field.value
+        if (ion !is ListElement) {
             throw InvalidSchemaException("timestamp_offset must be a list, was $ion")
         }
-        if (ion.isNullValue) {
+        if (ion.isNull) {
             throw InvalidSchemaException("timestamp_offset must not be a null value, was $ion")
         }
         if (ion.size == 0) {
             throw InvalidSchemaException("timestamp_offset must contain at least one offset")
         }
 
-        validOffsets = ion.map {
+        validOffsets = ion.values.map {
             // every timestamp offset must be of the form "[+|-]hh:mm"
 
-            if (it !is IonString) {
+            if (it !is StringElement) {
                 throw InvalidSchemaException("timestamp_offset values must be strings, found $it")
             }
-            val str = it.stringValue()
+            val str = it.textValue
             if (str == "-00:00") {
                 null
             } else {
@@ -93,13 +91,13 @@ internal class TimestampOffset(
         return int
     }
 
-    override fun validate(value: IonValue, issues: Violations) {
-        validateAs<IonTimestamp>(value, issues) { v ->
-            if (!validOffsets.contains(v.localOffset)) {
+    override fun validate(value: IonElement, issues: Violations) {
+        validateAs<TimestampElement>(value, issues) { v ->
+            if (!validOffsets.contains(v.timestampValue.localOffset)) {
                 issues.add(
                     Violation(
-                        ion, "invalid_timestamp_offset",
-                        "invalid timestamp offset ${v.localOffset}, expected $ion"
+                        constraintField, "invalid_timestamp_offset",
+                        "invalid timestamp offset ${v.timestampValue.localOffset}, expected $ion"
                     )
                 )
             }

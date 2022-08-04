@@ -15,12 +15,14 @@
 
 package com.amazon.ionschema
 
+import com.amazon.ion.IonSystem
 import com.amazon.ion.IonValue
+import com.amazon.ion.system.IonSystemBuilder
+import com.amazon.ionelement.api.*
 import com.amazon.ionschema.util.CloseableIterator
 import java.io.File
 import java.io.FileNotFoundException
 import java.io.FileReader
-import java.io.Reader
 
 /**
  * An [Authority] implementation that attempts to resolve schema ids to files
@@ -28,7 +30,16 @@ import java.io.Reader
  *
  * @property[basePath] The base path in the filesystem in which to resolve schema identifiers.
  */
-class AuthorityFilesystem(basePath: String) : Authority {
+class AuthorityFilesystem(
+    basePath: String,
+    private val loader: IonElementLoader = DEFAULT_LOADER,
+    private val ion: IonSystem = DEFAULT_ION_SYSTEM,
+) : Authority {
+    private companion object {
+        val DEFAULT_LOADER = createIonElementLoader(IonElementLoaderOptions(includeLocationMeta = true))
+        val DEFAULT_ION_SYSTEM = IonSystemBuilder.standard().build()!!
+    }
+
     private val basePath: String
 
     init {
@@ -44,7 +55,7 @@ class AuthorityFilesystem(basePath: String) : Authority {
         }
     }
 
-    override fun iteratorFor(iss: IonSchemaSystem, id: String): CloseableIterator<IonValue> {
+    override fun sequenceFor(id: String): CloseableSequence<IonElement>? {
         val file = File(basePath, id)
 
         if (!file.canonicalPath.startsWith(basePath)) {
@@ -52,22 +63,14 @@ class AuthorityFilesystem(basePath: String) : Authority {
             throw AccessDeniedException(File(id))
         }
 
-        if (file.exists() && file.canRead()) {
-            return object : CloseableIterator<IonValue> {
-                private var reader: FileReader? = FileReader(file)
-                private val iter = iss.ionSystem.iterate(reader)
-
-                override fun hasNext() = iter.hasNext()
-                override fun next() = iter.next()
-                override fun close() {
-                    try {
-                        reader?.let(Reader::close)
-                    } finally {
-                        reader = null
-                    }
-                }
-            }
+        return if (file.exists() && file.canRead()) {
+            loader.loadAllElements(ion.newReader(FileReader(file))).toCloseableSequence()
+        } else {
+            null
         }
-        return EMPTY_ITERATOR
+    }
+
+    override fun iteratorFor(iss: IonSchemaSystem, id: String): CloseableIterator<IonValue> {
+        return sequenceFor(id)?.use { it.map { it.toIonValue(iss.ionSystem) } }?.iterator()?.asCloseableIterator() ?: EMPTY_ITERATOR
     }
 }

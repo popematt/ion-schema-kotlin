@@ -15,7 +15,8 @@
 
 package com.amazon.ionschema.internal
 
-import com.amazon.ion.IonValue
+import com.amazon.ionelement.api.IonElement
+import com.amazon.ionelement.api.StructField
 import com.amazon.ionschema.Violation
 
 /**
@@ -23,13 +24,13 @@ import com.amazon.ionschema.Violation
  * constraints.
  */
 internal object CommonViolations {
-    fun INVALID_TYPE(constraint: IonValue, value: IonValue) = Violation(
+    fun INVALID_TYPE(constraint: StructField, value: IonElement) = Violation(
         constraint,
         "invalid_type",
         "not applicable for type %s".format(value.type.toString().toLowerCase())
     )
 
-    fun NULL_VALUE(constraint: IonValue) = Violation(
+    fun NULL_VALUE(constraint: StructField) = Violation(
         constraint,
         "null_value",
         "not applicable for null values"

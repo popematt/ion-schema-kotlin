@@ -15,57 +15,61 @@
 
 package com.amazon.ionschema.internal
 
-import com.amazon.ion.IonSymbol
-import com.amazon.ion.IonType
-import com.amazon.ion.IonValue
+import com.amazon.ionelement.api.ElementType
+import com.amazon.ionelement.api.IonElement
+import com.amazon.ionelement.api.SymbolElement
 import com.amazon.ionschema.Violation
 import com.amazon.ionschema.Violations
 import com.amazon.ionschema.internal.constraint.ConstraintBase
-import com.amazon.ionschema.internal.util.markReadOnly
+import com.amazon.ionschema.internal.util.DatagramElement
 
 /**
  * Instantiated to represent individual Core Types as defined by the
  * Ion Schema Specification.
  */
 internal class TypeCore(
-    nameSymbol: IonSymbol
-) : TypeInternal, ConstraintBase(nameSymbol), TypeBuiltin {
+    nameSymbol: SymbolElement
+) : TypeInternal, ConstraintBase("type", nameSymbol), TypeBuiltin {
 
-    private val ionType = when (nameSymbol.stringValue().toUpperCase()) {
-        "DOCUMENT" -> IonType.DATAGRAM
-        else -> IonType.valueOf(nameSymbol.stringValue().toUpperCase())
+    private val ionType = when (nameSymbol.textValue.toUpperCase()) {
+        "DOCUMENT" -> null
+        else -> ElementType.valueOf(nameSymbol.textValue.toUpperCase())
     }
 
-    private val ionTypeName = ionType.schemaTypeName()
+    private val ionTypeName = nameSymbol.withAnnotations().textValue
 
     override val name = ionTypeName
 
     override val schemaId: String? = null
 
-    override val isl = nameSymbol.markReadOnly()
+    override val isl = nameSymbol
 
     override fun getBaseType() = this
 
-    override fun isValidForBaseType(value: IonValue) = ionType.equals(value.type)
+    override fun isValidForBaseType(value: IonElement) = if (value is DatagramElement) {
+        ionType == null
+    } else {
+        ionType == value.type
+    }
 
-    override fun validate(value: IonValue, issues: Violations) {
-        if (!ionType.equals(value.type)) {
+    override fun validate(value: IonElement, issues: Violations) {
+        if (!isValidForBaseType(value)) {
             issues.add(
                 Violation(
-                    ion, "type_mismatch",
+                    constraintField, "type_mismatch",
                     "expected type %s, found %s".format(
                         ionTypeName,
-                        value.type.schemaTypeName()
+                        value.schemaTypeName()
                     )
                 )
             )
-        } else if (value.isNullValue) {
-            issues.add(CommonViolations.NULL_VALUE(ion))
+        } else if (value.isNull) {
+            issues.add(CommonViolations.NULL_VALUE(constraintField))
         }
     }
 }
 
-internal fun IonType.schemaTypeName() = when (this) {
-    IonType.DATAGRAM -> "document"
-    else -> this.toString().toLowerCase()
+internal fun IonElement.schemaTypeName() = when (this) {
+    is DatagramElement -> "document"
+    else -> type.toString().toLowerCase()
 }

@@ -15,16 +15,16 @@
 
 package com.amazon.ionschema.internal
 
-import com.amazon.ion.IonSymbol
+import com.amazon.ionelement.api.SymbolElement
 import com.amazon.ionschema.internal.constraint.ConstraintBase
 
 /**
  * Implementation of [Type] representing a type imported with an alias.
  */
 internal class TypeAliased(
-    ion: IonSymbol,
+    ion: SymbolElement,
     internal val type: ImportedType
-) : TypeInternal, ImportedType by type, ConstraintBase(ion) {
+) : TypeInternal, ImportedType by type, ConstraintBase("type+QWERTY3", ion) {
 
-    override val name = ion.stringValue()
+    override val name = ion.textValue
 }

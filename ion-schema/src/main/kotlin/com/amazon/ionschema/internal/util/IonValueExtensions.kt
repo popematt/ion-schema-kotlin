@@ -15,31 +15,14 @@
 
 package com.amazon.ionschema.internal.util
 
-import com.amazon.ion.IonDatagram
-import com.amazon.ion.IonSymbol
-import com.amazon.ion.IonValue
+import com.amazon.ionelement.api.ListElement
+import com.amazon.ionelement.api.StructElement
 
 /**
- * IonValue extension functions
+ * IonElement extension functions
  */
-internal fun IonValue.withoutTypeAnnotations() =
-    if (typeAnnotations.isNotEmpty()) {
-        clone().apply { clearTypeAnnotations() }
-    } else {
-        this
-    }
+internal operator fun ListElement.get(i: Int) = values[i]
 
-internal fun IonValue.markReadOnly(): IonValue {
-    this.makeReadOnly()
-    return this
-}
+internal fun StructElement.getOrNull(name: String) = fields.firstOrNull { it.name == name }
 
-internal fun IonDatagram.markReadOnly(): IonDatagram {
-    this.makeReadOnly()
-    return this
-}
-
-internal fun IonSymbol.markReadOnly(): IonSymbol {
-    this.makeReadOnly()
-    return this
-}
+internal operator fun StructElement.contains(name: String) = fields.any { it.name == name }

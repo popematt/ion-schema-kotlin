@@ -17,6 +17,10 @@ package com.amazon.ionschema.internal
 
 import com.amazon.ion.IonSystem
 import com.amazon.ion.IonValue
+import com.amazon.ionelement.api.IonElement
+import com.amazon.ionelement.api.StructElement
+import com.amazon.ionelement.api.StructField
+import com.amazon.ionelement.api.toIonElement
 import com.amazon.ionschema.Authority
 import com.amazon.ionschema.IonSchemaException
 import com.amazon.ionschema.IonSchemaSystem
@@ -43,14 +47,17 @@ internal class IonSchemaSystemImpl(
         schemaCache.getOrPut(id) {
             val exceptions = mutableListOf<Exception>()
             authorities.forEach { authority ->
-                try {
-                    authority.iteratorFor(this, id).use {
-                        if (it.hasNext()) {
-                            return@getOrPut SchemaImpl(this, schemaCore, it, id)
-                        }
+                val maybeSchema = try {
+                    authority.sequenceFor(id)?.use { it: Sequence<IonElement> ->
+                        SchemaImpl(this, schemaCore, it.iterator(), id)
                     }
                 } catch (e: Exception) {
                     exceptions.add(e)
+                    null
+                }
+
+                if (maybeSchema != null) {
+                    return@getOrPut maybeSchema
                 }
             }
 
@@ -65,11 +72,13 @@ internal class IonSchemaSystemImpl(
 
     override fun newSchema(isl: String) = newSchema(ionSystem.iterate(isl))
 
-    override fun newSchema(isl: Iterator<IonValue>) = SchemaImpl(this, schemaCore, isl, null)
+    override fun newSchema(isl: Iterator<IonValue>) = SchemaImpl(this, schemaCore, isl.asSequence().map { it.toIonElement() }.iterator(), null)
+
+    override fun newSchema(isl: Iterable<IonElement>) = SchemaImpl(this, schemaCore, isl.iterator(), null)
 
     internal fun isConstraint(name: String) = constraintFactory.isConstraint(name)
 
-    internal fun constraintFor(ion: IonValue, schema: Schema) = constraintFactory.constraintFor(ion, schema)
+    internal fun constraintFor(field: StructField, container: StructElement, schema: Schema) = constraintFactory.constraintFor(field, container, schema)
 
     internal fun getSchemaImportSet() = schemaImportSet
 

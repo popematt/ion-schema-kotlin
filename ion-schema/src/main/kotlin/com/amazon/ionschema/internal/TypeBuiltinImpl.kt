@@ -15,8 +15,7 @@
 
 package com.amazon.ionschema.internal
 
-import com.amazon.ion.IonStruct
-import com.amazon.ion.IonValue
+import com.amazon.ionelement.api.*
 import com.amazon.ionschema.Schema
 import com.amazon.ionschema.Violation
 import com.amazon.ionschema.Violations
@@ -28,19 +27,18 @@ import com.amazon.ionschema.internal.constraint.ConstraintBase
  * @see TypeBuiltin
  */
 internal class TypeBuiltinImpl private constructor(
-    ion: IonStruct,
+    ion: StructElement,
     private val delegate: TypeInternal
-) : TypeInternal by delegate, ConstraintBase(ion), TypeBuiltin {
+) : TypeInternal by delegate, ConstraintBase("$ion", ion), TypeBuiltin {
 
-    constructor (ionStruct: IonStruct, schema: Schema) :
-        this(ionStruct, TypeImpl(ionStruct, schema, addDefaultTypeConstraint = false))
+    constructor (StructElement: StructElement, schema: Schema) :
+        this(StructElement, TypeImpl(StructElement, schema, addDefaultTypeConstraint = false))
 
-    override val name = ion.fieldName
+    override val name = "$ion"
 
-    override fun validate(value: IonValue, issues: Violations) {
-        val struct = ion.system.newEmptyStruct()
-        struct.put("type", ion.system.newSymbol(name))
-        val violation = Violation(struct, "type_mismatch")
+    override fun validate(value: IonElement, issues: Violations) {
+        val struct = ionStructOf("type+QWERTY0" to ionSymbol(name))
+        val violation = Violation(field(name, struct), "type_mismatch")
         delegate.validate(value, violation)
         if (!violation.isValid()) {
             violation.message = "expected type %s".format(name)

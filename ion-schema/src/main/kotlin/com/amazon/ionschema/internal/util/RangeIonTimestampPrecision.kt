@@ -15,10 +15,9 @@
 
 package com.amazon.ionschema.internal.util
 
-import com.amazon.ion.IonList
-import com.amazon.ion.IonSymbol
-import com.amazon.ion.IonTimestamp
 import com.amazon.ion.Timestamp
+import com.amazon.ionelement.api.*
+import com.amazon.ionelement.api.ListElement
 import com.amazon.ionschema.InvalidSchemaException
 
 /**
@@ -31,8 +30,8 @@ import com.amazon.ionschema.InvalidSchemaException
  * @see IonTimestampPrecision
  */
 internal class RangeIonTimestampPrecision(
-    ion: IonList
-) : Range<IonTimestamp> {
+    ion: ListElement
+) : Range<TimestampElement> {
 
     private val delegate: Range<Int>
 
@@ -41,39 +40,29 @@ internal class RangeIonTimestampPrecision(
 
         // convert to an int range
         // e.g., range::[year, exclusive::millisecond] is translated to range::[-4, exclusive::3]
-        val intRangeIon = ion.system.newEmptyList()
-        intRangeIon.addTypeAnnotation("range")
-        ion.forEachIndexed { index, ionValue ->
-            val isValid = try {
-                if (ionValue is IonSymbol && !ionValue.isNullValue) {
-                    val ionInt = when (ionValue.stringValue()) {
-                        "min" -> ionValue.clone()
-                        "max" -> ionValue.clone()
-                        else -> ion.system.newInt(IonTimestampPrecision.valueOf(ionValue.stringValue()).id)
-                    }
-                    ionValue.typeAnnotations.forEach { ionInt.addTypeAnnotation(it) }
-                    intRangeIon.add(ionInt)
-                    true
-                } else {
-                    false
-                }
-            } catch (e: IllegalArgumentException) {
-                false
-            }
+        val intRangeIon = ion.values.mapIndexed { index, ionElement ->
 
-            if (!isValid) {
+            if (ionElement is SymbolElement) {
+                val ionInt = when (ionElement.textValue) {
+                    "min" -> ionElement
+                    "max" -> ionElement
+                    else -> ionInt(IonTimestampPrecision.valueOf(ionElement.textValue).id.toLong())
+                }
+                ionInt.withAnnotations(ionElement.annotations)
+            } else {
+
                 val end = if (index == 0) {
                     "lower"
                 } else {
                     "upper"
                 }
-                throw InvalidSchemaException("Invalid timestamp range $end bound:  $ionValue")
+                throw InvalidSchemaException("Invalid timestamp range $end bound:  $ionElement")
             }
-        }
+        }.let { ionListOf(it, annotations = listOf("range")) }
         delegate = RangeFactory.rangeOf<Int>(intRangeIon, RangeType.INT)
     }
 
-    override fun contains(value: IonTimestamp) = delegate.contains(IonTimestampPrecision.toInt(value))
+    override fun contains(value: TimestampElement) = delegate.contains(IonTimestampPrecision.toInt(value))
 }
 
 /**
@@ -98,13 +87,13 @@ internal enum class IonTimestampPrecision(val id: Int) {
     nanosecond(9);
 
     companion object {
-        fun toInt(ion: IonTimestamp): Int =
-            when (ion.timestampValue().precision) {
+        fun toInt(ion: TimestampElement): Int =
+            when (ion.timestampValue.precision) {
                 Timestamp.Precision.YEAR -> year.id
                 Timestamp.Precision.MONTH -> month.id
                 Timestamp.Precision.DAY -> day.id
                 Timestamp.Precision.MINUTE -> minute.id
-                Timestamp.Precision.SECOND, Timestamp.Precision.FRACTION -> ion.timestampValue().decimalSecond.scale()
+                Timestamp.Precision.SECOND, Timestamp.Precision.FRACTION -> ion.timestampValue.decimalSecond.scale()
                 null -> throw NullPointerException()
             }
     }

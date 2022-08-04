@@ -16,6 +16,7 @@
 package com.amazon.ionschema.internal.util
 
 import com.amazon.ion.system.IonSystemBuilder
+import com.amazon.ionelement.api.loadSingleElement
 import com.amazon.ionschema.IonSchemaException
 import com.amazon.ionschema.internal.util.RangeBoundaryType.EXCLUSIVE
 import com.amazon.ionschema.internal.util.RangeBoundaryType.INCLUSIVE
@@ -34,12 +35,12 @@ internal class RangeBoundaryTypeTest {
     @Test fun min_exclusive() { assertException("exclusive::min") }
 
     private fun assert(expected: RangeBoundaryType, str: String) {
-        assertEquals(expected, RangeBoundaryType.forIon(ION.singleValue(str)))
+        assertEquals(expected, RangeBoundaryType.forIon(loadSingleElement(str)))
     }
 
     private fun assertException(str: String) {
         try {
-            RangeBoundaryType.forIon(ION.singleValue(str))
+            RangeBoundaryType.forIon(loadSingleElement(str))
             fail("Expected an IonSchemaException")
         } catch (e: IonSchemaException) {
         }

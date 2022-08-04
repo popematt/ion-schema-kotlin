@@ -15,18 +15,15 @@
 
 package com.amazon.ionschema.internal.constraint
 
-import com.amazon.ion.IonStruct
-import com.amazon.ion.IonSymbol
-import com.amazon.ion.IonValue
-import com.amazon.ion.system.IonSystemBuilder
+import com.amazon.ionelement.api.*
 import com.amazon.ionschema.InvalidSchemaException
 import com.amazon.ionschema.Schema
 import com.amazon.ionschema.Violation
 import com.amazon.ionschema.ViolationChild
 import com.amazon.ionschema.Violations
-import com.amazon.ionschema.internal.TypeInternal
 import com.amazon.ionschema.internal.TypeReference
 import com.amazon.ionschema.internal.constraint.Occurs.Companion.toRange
+import com.amazon.ionschema.internal.util.*
 import com.amazon.ionschema.internal.util.Range
 import com.amazon.ionschema.internal.util.RangeFactory
 import com.amazon.ionschema.internal.util.RangeIntNonNegative
@@ -37,34 +34,41 @@ import com.amazon.ionschema.internal.util.RangeType
  *
  * @see https://amzn.github.io/ion-schema/docs/spec.html#occurs
  */
-internal open class Occurs(
-    ion: IonValue,
+internal class Occurs(
+    variablyOccurringTypeDefinition: IonElement,
     schema: Schema,
-    defaultRange: Range<Int>,
-    isField: Boolean = false
-) : ConstraintBase(ion) {
+    defaultRange: DefaultOccurs,
+) : ConstraintBase(field("occurs", getOccursElement(variablyOccurringTypeDefinition, defaultRange))) {
+
+    internal val range: Range<Int> = toRange(ion)
+    private val typeReference = TypeReference.create(variablyOccurringTypeDefinition, schema, isField = true)
+    private var attempts = 0
+    internal var validCount = 0
+
+    enum class DefaultOccurs(val range: Range<Int>, val ion: IonElement) {
+        OPTIONAL(
+            RangeFactory.rangeOf<Int>(
+                loadSingleElement("range::[0, 1]"),
+                RangeType.INT_NON_NEGATIVE
+            ),
+            ionSymbol("optional")
+        ),
+        REQUIRED(
+            RangeFactory.rangeOf<Int>(
+                loadSingleElement("range::[1, 1]"),
+                RangeType.INT_NON_NEGATIVE
+            ),
+            ionSymbol("required")
+        );
+    }
 
     companion object {
-        private val ION = IonSystemBuilder.standard().build()
-
-        internal val OPTIONAL = RangeFactory.rangeOf<Int>(
-            ION.singleValue("range::[0, 1]"),
-            RangeType.INT_NON_NEGATIVE
-        )
-        internal val REQUIRED = RangeFactory.rangeOf<Int>(
-            ION.singleValue("range::[1, 1]"),
-            RangeType.INT_NON_NEGATIVE
-        )
-
-        private val OPTIONAL_ION = (ION.singleValue("{ occurs: optional }") as IonStruct).get("occurs")
-        private val REQUIRED_ION = (ION.singleValue("{ occurs: required }") as IonStruct).get("occurs")
-
-        internal fun toRange(ion: IonValue): Range<Int> {
-            if (!ion.isNullValue) {
-                return if (ion is IonSymbol) {
+        internal fun toRange(ion: IonElement): Range<Int> {
+            if (!ion.isNull) {
+                return if (ion is SymbolElement) {
                     when (ion) {
-                        OPTIONAL_ION -> OPTIONAL
-                        REQUIRED_ION -> REQUIRED
+                        DefaultOccurs.OPTIONAL.ion -> DefaultOccurs.OPTIONAL.range
+                        DefaultOccurs.REQUIRED.ion -> DefaultOccurs.REQUIRED.range
                         else -> throw InvalidSchemaException("Invalid ion constraint '$ion'")
                     }
                 } else {
@@ -77,48 +81,17 @@ internal open class Occurs(
             }
             throw InvalidSchemaException("Invalid occurs constraint '$ion'")
         }
-    }
 
-    internal val range: Range<Int>
-    internal val occursIon: IonValue
-    private val typeReference: () -> TypeInternal
-    private var attempts = 0
-    internal var validCount = 0
-
-    init {
-        var occurs: IonValue? = null
-        range =
-            if (ion is IonStruct && !ion.isNullValue) {
-                occurs = ion["occurs"]
-                if (occurs != null) {
-                    toRange(occurs)
-                } else {
-                    defaultRange
-                }
-            } else {
-                defaultRange
+        fun getOccursElement(ionElement: IonElement, defaultRange: DefaultOccurs): IonElement {
+            var occurs: IonElement? = null
+            if (ionElement is StructElement && !ionElement.isNull) {
+                occurs = ionElement.getOrNull("occurs")?.value
             }
-
-        val tmpIon = if (ion is IonStruct && occurs != null) {
-            ion.cloneAndRemove("occurs")
-        } else {
-            ion
+            return occurs ?: defaultRange.ion
         }
-        typeReference = TypeReference.create(tmpIon, schema, isField)
-
-        occursIon =
-            if (occurs != null) {
-                occurs
-            } else {
-                when (range) {
-                    OPTIONAL -> OPTIONAL_ION
-                    REQUIRED -> REQUIRED_ION
-                    else -> throw InvalidSchemaException("Invalid occurs constraint '$range'")
-                }
-            }
     }
 
-    override fun validate(value: IonValue, issues: Violations) {
+    override fun validate(value: IonElement, issues: Violations) {
         attempts++
 
         typeReference().validate(value, issues)
@@ -130,7 +103,7 @@ internal open class Occurs(
         if (!range.contains(attempts)) {
             issues.add(
                 Violation(
-                    occursIon, "occurs_mismatch",
+                    constraintField, "occurs_mismatch",
                     "expected %s occurrences, found %s".format(range, attempts)
                 )
             )
@@ -141,7 +114,7 @@ internal open class Occurs(
         if (!isValidCountWithinRange()) {
             issues.add(
                 Violation(
-                    occursIon, "occurs_mismatch",
+                    constraintField, "occurs_mismatch",
                     "expected %s occurrences, found %s".format(range, validCount)
                 )
             )
@@ -160,14 +133,14 @@ internal open class Occurs(
  * by the Fields and OrderedElements constraints.
  */
 internal open class OccursNoop(
-    ion: IonValue
+    ion: StructField
 ) : ConstraintBase(ion) {
 
     init {
-        toRange(ion)
+        toRange(ion.value)
     }
 
-    override fun validate(value: IonValue, issues: Violations) {
+    override fun validate(value: IonElement, issues: Violations) {
         // no-op
     }
 }

@@ -15,7 +15,8 @@
 
 package com.amazon.ionschema.internal
 
-import com.amazon.ion.IonValue
+import com.amazon.ionelement.api.StructElement
+import com.amazon.ionelement.api.StructField
 import com.amazon.ionschema.Schema
 import com.amazon.ionschema.internal.constraint.AllOf
 import com.amazon.ionschema.internal.constraint.Annotations
@@ -77,8 +78,8 @@ internal class ConstraintFactoryDefault : ConstraintFactory {
             false
         }
 
-    override fun constraintFor(ion: IonValue, schema: Schema) =
-        when (Constraints.valueOf(ion.fieldName)) {
+    override fun constraintFor(ion: StructField, container: StructElement, schema: Schema) =
+        when (Constraints.valueOf(ion.name)) {
             Constraints.all_of -> AllOf(ion, schema)
             Constraints.annotations -> Annotations(ion)
             Constraints.any_of -> AnyOf(ion, schema)
@@ -88,7 +89,7 @@ internal class ConstraintFactoryDefault : ConstraintFactory {
             Constraints.contains -> Contains(ion)
             Constraints.content -> Content(ion)
             Constraints.element -> Element(ion, schema)
-            Constraints.fields -> Fields(ion, schema)
+            Constraints.fields -> Fields(ion, container, schema)
             Constraints.not -> Not(ion, schema)
             Constraints.occurs -> OccursNoop(ion)
             Constraints.one_of -> OneOf(ion, schema)

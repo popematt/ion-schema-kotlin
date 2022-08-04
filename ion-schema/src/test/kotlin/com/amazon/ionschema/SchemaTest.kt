@@ -17,6 +17,8 @@ package com.amazon.ionschema
 
 import com.amazon.ion.IonStruct
 import com.amazon.ion.system.IonSystemBuilder
+import com.amazon.ionelement.api.IonElement
+import com.amazon.ionelement.api.loadAllElements
 import com.amazon.ionschema.internal.SchemaCore
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -219,9 +221,7 @@ class SchemaTest {
     fun isl() {
         val isl = islTemplate.format("")
         val schema = iss.newSchema(isl)
-        assertEquals(ION.newLoader().load(isl), schema.isl)
-        assertTrue(schema.isl.isReadOnly)
-        assertNull(schema.isl.container)
+        assertEquals(loadAllElements(isl).toList(), schema.isl)
     }
 
     @Test
@@ -234,9 +234,7 @@ class SchemaTest {
 
         val newIsl = islTemplate.format(type3isl)
         assertNotEquals(isl, newIsl)
-        assertEquals(ION.newLoader().load(newIsl), newSchema.isl)
-        assertTrue(newSchema.isl.isReadOnly)
-        assertNull(newSchema.getType("three")!!.isl.container)
+        assertEquals(loadAllElements(newIsl).toList(), newSchema.isl)
     }
 
     @Test
@@ -249,16 +247,12 @@ class SchemaTest {
 
         val newIsl = islTemplate.format("").replace("2", "222")
         assertNotEquals(isl, newIsl)
-        assertEquals(ION.newLoader().load(newIsl), newSchema.isl)
-        assertTrue(newSchema.isl.isReadOnly)
-        assertNull(schema.getType("two")!!.isl.container)
+        assertEquals(loadAllElements(newIsl).toList(), newSchema.isl)
     }
 
     @Test
     fun isl_SchemaCore() {
         val schemaCore = SchemaCore(iss)
-        assertEquals(ION.newDatagram(), schemaCore.isl)
-        assertTrue(schemaCore.isl.isReadOnly)
-        assertNull(schemaCore.isl.container)
+        assertEquals(emptyList<IonElement>(), schemaCore.isl)
     }
 }

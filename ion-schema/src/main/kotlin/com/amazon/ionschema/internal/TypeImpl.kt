@@ -15,14 +15,14 @@
 
 package com.amazon.ionschema.internal
 
-import com.amazon.ion.IonStruct
-import com.amazon.ion.IonSymbol
-import com.amazon.ion.IonValue
 import com.amazon.ion.system.IonSystemBuilder
+import com.amazon.ionelement.api.IonElement
+import com.amazon.ionelement.api.StructElement
+import com.amazon.ionelement.api.SymbolElement
+import com.amazon.ionelement.api.ionSymbol
 import com.amazon.ionschema.Schema
 import com.amazon.ionschema.Violations
 import com.amazon.ionschema.internal.constraint.ConstraintBase
-import com.amazon.ionschema.internal.util.markReadOnly
 
 /**
  * Implementation of [Type] backed by a collection of zero or more [Constraint]s.
@@ -31,26 +31,26 @@ import com.amazon.ionschema.internal.util.markReadOnly
  * (unless addDefaultTypeConstraint is `false`).
  */
 internal class TypeImpl(
-    private val ionStruct: IonStruct,
+    private val ionStruct: StructElement,
     private val schema: Schema,
     addDefaultTypeConstraint: Boolean = true
-) : TypeInternal, ConstraintBase(ionStruct) {
+) : TypeInternal, ConstraintBase("type+QWERTY2", ionStruct) {
 
     private companion object {
         private val ION = IonSystemBuilder.standard().build()
-        private val ANY = ION.newSymbol("any")
+        private val ANY = ionSymbol("any")
     }
 
-    override val isl = ionStruct.markReadOnly()
+    override val isl = ionStruct
 
     internal val constraints: List<Constraint>
 
     init {
         var foundTypeConstraint = false
-        constraints = ionStruct.asSequence()
-            .filter { it.fieldName == null || (schema.getSchemaSystem() as IonSchemaSystemImpl).isConstraint(it.fieldName) }
-            .onEach { if (it.fieldName == "type") { foundTypeConstraint = true } }
-            .map { (schema.getSchemaSystem() as IonSchemaSystemImpl).constraintFor(it, schema) }
+        constraints = ionStruct.fields.asSequence()
+            .filter { (schema.getSchemaSystem() as IonSchemaSystemImpl).isConstraint(it.name) }
+            .onEach { if (it.name == "type") { foundTypeConstraint = true } }
+            .map { (schema.getSchemaSystem() as IonSchemaSystemImpl).constraintFor(it, ionStruct, schema) }
             .toMutableList()
 
         if (!foundTypeConstraint && addDefaultTypeConstraint) {
@@ -59,14 +59,14 @@ internal class TypeImpl(
         }
     }
 
-    override val name = (ionStruct.get("name") as? IonSymbol)?.stringValue() ?: ionStruct.toString()
+    override val name = (ionStruct.getOptional("name") as? SymbolElement)?.textValue ?: ionStruct.toString()
 
     override val schemaId: String? = (schema as? SchemaImpl)?.schemaId
 
     override fun getBaseType(): TypeBuiltin {
-        val type = ionStruct["type"]
-        if (type != null && type is IonSymbol) {
-            val parentType = schema.getType(type.stringValue())
+        val type = ionStruct.getOptional("type")
+        if (type != null && type is SymbolElement) {
+            val parentType = schema.getType(type.textValue)
             if (parentType != null) {
                 return (parentType as TypeInternal).getBaseType()
             }
@@ -74,9 +74,9 @@ internal class TypeImpl(
         return schema.getType("any")!! as TypeBuiltin
     }
 
-    override fun isValidForBaseType(value: IonValue) = getBaseType().isValidForBaseType(value)
+    override fun isValidForBaseType(value: IonElement) = getBaseType().isValidForBaseType(value)
 
-    override fun validate(value: IonValue, issues: Violations) {
+    override fun validate(value: IonElement, issues: Violations) {
         constraints.forEach {
             it.validate(value, issues)
         }

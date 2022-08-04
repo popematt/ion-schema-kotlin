@@ -15,10 +15,7 @@
 
 package com.amazon.ionschema.internal.util
 
-import com.amazon.ion.IonInt
-import com.amazon.ion.IonList
-import com.amazon.ion.IonSymbol
-import com.amazon.ion.IonValue
+import com.amazon.ionelement.api.*
 import com.amazon.ionschema.InvalidSchemaException
 
 /**
@@ -44,46 +41,45 @@ internal interface Range<in T> {
  */
 internal class RangeFactory {
     companion object {
-        fun <T> rangeOf(ion: IonValue, rangeType: RangeType): Range<T> {
-            if (ion.isNullValue) {
+        fun <T> rangeOf(ion: IonElement, rangeType: RangeType): Range<T> {
+            if (ion.isNull) {
                 throw InvalidSchemaException("Invalid range $ion")
             }
 
-            val ionList = when (ion) {
-                !is IonList -> {
-                    val range = ion.system.newList(ion.clone(), ion.clone())
-                    range.addTypeAnnotation("range")
+            val listElement = when (ion) {
+                !is ListElement -> {
+                    val range = ionListOf(ion, ion, annotations = listOf("range"))
                     range
                 }
                 else -> ion
             }
 
-            checkRange(ionList)
+            checkRange(listElement)
 
             @Suppress("UNCHECKED_CAST")
             return when (rangeType) {
-                RangeType.INT -> RangeInt(ionList)
-                RangeType.INT_NON_NEGATIVE -> RangeIntNonNegative(ionList)
-                RangeType.ION_NUMBER -> RangeIonNumber(ionList)
-                RangeType.ION_TIMESTAMP -> RangeIonTimestamp(ionList)
-                RangeType.ION_TIMESTAMP_PRECISION -> RangeIonTimestampPrecision(ionList)
+                RangeType.INT -> RangeInt(listElement)
+                RangeType.INT_NON_NEGATIVE -> RangeIntNonNegative(listElement)
+                RangeType.ION_NUMBER -> RangeIonNumber(listElement)
+                RangeType.ION_TIMESTAMP -> RangeIonTimestamp(listElement)
+                RangeType.ION_TIMESTAMP_PRECISION -> RangeIonTimestampPrecision(listElement)
             } as Range<T>
         }
     }
 }
 
-internal fun checkRange(ion: IonList) {
+internal fun checkRange(ion: ListElement) {
     when {
-        !ion.hasTypeAnnotation("range") ->
+        "range" !in ion.annotations ->
             throw InvalidSchemaException("Invalid range, missing 'range' annotation:  $ion")
         ion.size != 2 ->
             throw InvalidSchemaException("Invalid range, size of list must be 2:  $ion")
-        ion[0].isNullValue || ion[1].isNullValue || (isRangeMin(ion[0]) && isRangeMax(ion[1])) ->
+        ion[0].isNull || ion[1].isNull || (isRangeMin(ion[0]) && isRangeMax(ion[1])) ->
             throw InvalidSchemaException("Invalid range $ion")
     }
 }
 
-internal fun isRangeMin(ion: IonValue) = (ion as? IonSymbol)?.stringValue().equals("min")
-internal fun isRangeMax(ion: IonValue) = (ion as? IonSymbol)?.stringValue().equals("max")
+internal fun isRangeMin(ion: IonElement) = (ion as? SymbolElement)?.textValue == "min"
+internal fun isRangeMax(ion: IonElement) = (ion as? SymbolElement)?.textValue == "max"
 
-internal fun toInt(ion: IonValue) = (ion as? IonInt)?.intValue()
+internal fun toInt(ion: IonElement) = (ion as? IntElement)?.longValue?.toInt()

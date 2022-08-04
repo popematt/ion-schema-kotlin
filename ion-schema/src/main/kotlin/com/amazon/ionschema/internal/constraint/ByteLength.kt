@@ -15,8 +15,8 @@
 
 package com.amazon.ionschema.internal.constraint
 
-import com.amazon.ion.IonLob
-import com.amazon.ion.IonValue
+import com.amazon.ionelement.api.LobElement
+import com.amazon.ionelement.api.StructField
 
 /**
  * Implements the byte_length constraint.
@@ -24,11 +24,11 @@ import com.amazon.ion.IonValue
  * @see https://amzn.github.io/ion-schema/docs/spec.html#byte_length
  */
 internal class ByteLength(
-    ion: IonValue
-) : ConstraintBaseIntRange<IonLob>(IonLob::class.java, ion) {
+    ion: StructField
+) : ConstraintBaseIntRange<LobElement>(LobElement::class.java, ion) {
 
     override val violationCode = "invalid_byte_length"
     override val violationMessage = "invalid byte length %s, expected %s"
 
-    override fun getIntValue(value: IonLob) = value.byteSize()
+    override fun getIntValue(value: LobElement) = value.bytesValue.size()
 }

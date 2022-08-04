@@ -15,27 +15,30 @@
 
 package com.amazon.ionschema.internal.util
 
-import com.amazon.ion.IonList
 import com.amazon.ion.system.IonSystemBuilder
+import com.amazon.ionelement.api.IonElement
+import com.amazon.ionelement.api.ListElement
+import com.amazon.ionelement.api.loadAllElements
+import com.amazon.ionelement.api.loadSingleElement
 import com.amazon.ionschema.InvalidSchemaException
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assertions.fail
 
-internal abstract class AbstractRangeTest(
+internal abstract class AbstractRangeTest<in T : Any>(
     private val rangeType: RangeType
 ) {
     private val ION = IonSystemBuilder.standard().build()
 
-    abstract fun <T : Any> rangeOf(ion: IonList): Range<T>
+    abstract fun rangeOf(ion: ListElement): Range<T>
 
     fun assertValidRangeAndValues(
         rangeDef: String,
-        validValues: List<Any>,
-        invalidValues: List<Any>
+        validValues: List<T>,
+        invalidValues: List<T>
     ) {
 
-        val range = rangeOf<Any>(ION.singleValue(rangeDef) as IonList)
+        val range = rangeOf(loadSingleElement(rangeDef).asList())
         validValues.forEach {
             assertTrue(
                 range.contains(it),
@@ -52,17 +55,17 @@ internal abstract class AbstractRangeTest(
 
     fun assertInvalidRange(rangeDef: String) {
         try {
-            rangeOf<Any>(ION.singleValue(rangeDef) as IonList)
+            rangeOf(loadSingleElement(rangeDef).asList())
             fail("Expected InvalidSchemaException for $rangeDef")
         } catch (e: InvalidSchemaException) {
         }
     }
 
-    fun ionListOf(vararg items: String): IonList {
+    fun listOfIonElements(vararg items: String): List<IonElement> {
         val ionList = ION.newEmptyList()
         items.forEach {
             ionList.add(ION.singleValue(it))
         }
-        return ionList
+        return loadAllElements(items.joinToString(" ")).toList()
     }
 }

@@ -15,8 +15,14 @@
 
 package com.amazon.ionschema
 
+import com.amazon.ion.IonDatagram
 import com.amazon.ion.IonValue
+import com.amazon.ion.ValueFactory
+import com.amazon.ionelement.api.IonElement
+import com.amazon.ionelement.api.toIonElement
+import com.amazon.ionelement.api.toIonValue
 import com.amazon.ionschema.internal.Constraint
+import com.amazon.ionschema.internal.util.DatagramElement
 
 /**
  * A Type consists of an optional name and zero or more constraints.
@@ -33,22 +39,36 @@ interface Type {
     /**
      * A read-only view of the ISL for this type.
      */
-    val isl: IonValue
+    val isl: IonElement
 
     /**
      * If the specified value violates one or more of this type's constraints,
      * returns `false`, otherwise `true`.
      */
-    fun isValid(value: IonValue): Boolean = validate(this, value, true).isValid()
+    fun isValid(value: IonElement): Boolean = validate(this, value, true).isValid()
+    fun isValid(value: IonValue): Boolean = isValid(
+        if (value is IonDatagram) {
+            DatagramElement(value.map { it.toIonElement() })
+        } else {
+            value.toIonElement()
+        }
+    )
 
     /**
      * Returns a Violations object indicating whether the specified value
      * is valid for this type, and if not, provides details as to which
      * constraints were violated.
      */
-    fun validate(value: IonValue): Violations = validate(this, value, false)
+    fun validate(value: IonElement): Violations = validate(this, value, false)
+    fun validate(value: IonValue): Violations = validate(
+        if (value is IonDatagram) {
+            DatagramElement(value.map { it.toIonElement() })
+        } else {
+            value.toIonElement()
+        }
+    )
 
-    private fun validate(type: Type, value: IonValue, shortCircuit: Boolean): Violations {
+    private fun validate(type: Type, value: IonElement, shortCircuit: Boolean): Violations {
         val violations = Violations(
             shortCircuit = shortCircuit,
             childrenAllowed = false
@@ -59,5 +79,14 @@ interface Type {
             // short-circuit validation winds up here, safe to ignore
         }
         return violations
+    }
+
+    class IonValueType(private val type: Type, private val valueFactory: ValueFactory) {
+        val name: String
+            get() = type.name
+        val isl: IonValue
+            get() = type.isl.toIonValue(valueFactory)
+        fun isValid(value: IonValue) = type.isValid(value.toIonElement())
+        fun validate(value: IonValue) = type.validate(value.toIonElement())
     }
 }

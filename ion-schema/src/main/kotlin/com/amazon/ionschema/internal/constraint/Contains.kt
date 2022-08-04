@@ -15,9 +15,7 @@
 
 package com.amazon.ionschema.internal.constraint
 
-import com.amazon.ion.IonContainer
-import com.amazon.ion.IonList
-import com.amazon.ion.IonValue
+import com.amazon.ionelement.api.*
 import com.amazon.ionschema.InvalidSchemaException
 import com.amazon.ionschema.Violation
 import com.amazon.ionschema.Violations
@@ -28,25 +26,25 @@ import com.amazon.ionschema.Violations
  * @see https://amzn.github.io/ion-schema/docs/spec.html#contains
  */
 internal class Contains(
-    ion: IonValue
+    ion: StructField
 ) : ConstraintBase(ion) {
 
-    private val expectedElements = if (ion !is IonList || ion.isNullValue) {
+    private val expectedElements = if (ion.value !is ListElement) {
         throw InvalidSchemaException("Expected annotations as a list, found: $ion")
     } else {
-        ion.toArray()
+        ion.value.asList().values
     }
 
-    override fun validate(value: IonValue, issues: Violations) {
-        validateAs<IonContainer>(value, issues) { v ->
+    override fun validate(value: IonElement, issues: Violations) {
+        validateAs<ContainerElement>(value, issues) { v ->
             val expectedValues = expectedElements.toMutableSet()
-            v.forEach {
+            v.values.forEach {
                 expectedValues.remove(it)
             }
             if (!expectedValues.isEmpty()) {
                 issues.add(
                     Violation(
-                        ion, "missing_values",
+                        constraintField, "missing_values",
                         "missing value(s): " + expectedValues.joinToString { it.toString() }
                     )
                 )

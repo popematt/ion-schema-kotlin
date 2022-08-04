@@ -15,8 +15,7 @@
 
 package com.amazon.ionschema.internal.constraint
 
-import com.amazon.ion.IonContainer
-import com.amazon.ion.IonValue
+import com.amazon.ionelement.api.*
 import com.amazon.ionschema.Schema
 import com.amazon.ionschema.Violation
 import com.amazon.ionschema.ViolationChild
@@ -29,24 +28,31 @@ import com.amazon.ionschema.internal.TypeReference
  * @see https://amzn.github.io/ion-schema/docs/spec.html#element
  */
 internal class Element(
-    ion: IonValue,
+    ion: StructField,
     schema: Schema
 ) : ConstraintBase(ion) {
 
-    private val typeReference = TypeReference.create(ion, schema, isField = true)
+    private val typeReference = TypeReference.create(ion.value, schema, isField = true)
 
-    override fun validate(value: IonValue, issues: Violations) {
-        validateAs<IonContainer>(value, issues) { v ->
-            val elementIssues = Violation(ion, "element_mismatch", "one or more elements don't match expectations")
-            v.forEachIndexed { idx, it ->
-                val elementValidation = if (it.fieldName == null) {
-                    ViolationChild(index = idx, value = it)
-                } else {
-                    ViolationChild(fieldName = it.fieldName, value = it)
+    override fun validate(value: IonElement, issues: Violations) {
+        validateAs<ContainerElement>(value, issues) { v ->
+            val elementIssues = Violation(constraintField, "element_mismatch", "one or more elements don't match expectations")
+
+            if (v is StructElement) {
+                v.fields.forEach { (name, it) ->
+                    val elementValidation = ViolationChild(fieldName = name, value = it)
+                    typeReference().validate(it, elementValidation)
+                    if (!elementValidation.isValid()) {
+                        elementIssues.add(elementValidation)
+                    }
                 }
-                typeReference().validate(it, elementValidation)
-                if (!elementValidation.isValid()) {
-                    elementIssues.add(elementValidation)
+            } else {
+                v.values.forEachIndexed { idx, it ->
+                    val elementValidation = ViolationChild(index = idx, value = it)
+                    typeReference().validate(it, elementValidation)
+                    if (!elementValidation.isValid()) {
+                        elementIssues.add(elementValidation)
+                    }
                 }
             }
             if (!elementIssues.isValid()) {

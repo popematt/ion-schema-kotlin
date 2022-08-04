@@ -21,6 +21,9 @@ import com.amazon.ion.IonStruct
 import com.amazon.ion.IonSymbol
 import com.amazon.ion.IonValue
 import com.amazon.ion.system.IonTextWriterBuilder
+import com.amazon.ionelement.api.ionStructOf
+import com.amazon.ionelement.api.toIonElement
+import com.amazon.ionelement.api.toIonValue
 import com.amazon.ionschema.IonSchemaTestFilesSource.Companion.ION_SCHEMA_TESTS_DIR
 import com.amazon.ionschema.internal.IonSchemaSystemImpl
 import com.amazon.ionschema.internal.SchemaCore
@@ -67,7 +70,7 @@ class IonSchemaTestRunner {
             1 -> {
                 val schemaIon = testFileIon.dropWhile { !it.hasTypeAnnotation("schema_header") }.dropLastWhile { !it.hasTypeAnnotation("schema_footer") }
                 val testCasesIon = testFileIon.takeWhile { !it.hasTypeAnnotation("schema_header") } + testFileIon.takeLastWhile { !it.hasTypeAnnotation("schema_footer") }
-                schema = SchemaImpl(schemaSystem, schemaCore, schemaIon.iterator(), testFile)
+                schema = SchemaImpl(schemaSystem, schemaCore, schemaIon.toIonElements().iterator(), testFile)
                 testCasesIon
             }
             else -> throw IllegalArgumentException("IonSchemaTestRunner does not support multiple valid schema definitions in a single test file.")
@@ -78,7 +81,7 @@ class IonSchemaTestRunner {
         val dynamicNodeTestCases: List<DynamicNode> = testCasesIon.mapNotNull { ion ->
             when (val annotation = ion.typeAnnotations[0]) {
                 "type" -> {
-                    lastSeenType = TypeImpl(ion as IonStruct, schemaCore)
+                    lastSeenType = TypeImpl(ion.toIonElement().asStruct(), schemaCore)
                     null
                 }
 
@@ -99,12 +102,12 @@ class IonSchemaTestRunner {
 
                 "invalid_schema" -> dynamicTest("[$testFile] schema should be invalid: $ion") {
                     assertThrows<InvalidSchemaException> {
-                        SchemaImpl(schemaSystem, schemaCore, (prepareValue(ion) as IonSequence).iterator(), testFile)
+                        SchemaImpl(schemaSystem, schemaCore, (prepareValue(ion) as IonSequence).toIonElements().iterator(), testFile)
                     }
                 }
 
                 "invalid_type" -> dynamicTest("[$testFile] type should be invalid: $ion") {
-                    assertThrows<InvalidSchemaException> { TypeImpl(ion as IonStruct, schemaCore) }
+                    assertThrows<InvalidSchemaException> { TypeImpl(ion.toIonElement().asStruct(), schemaCore) }
                 }
 
                 "test_validation" -> {
@@ -131,6 +134,7 @@ class IonSchemaTestRunner {
                             }
                         }
                     )
+                    null
                 }
                 else -> throw Exception("Unrecognized annotation '$annotation' in ${file.path}")
             }
@@ -144,7 +148,11 @@ class IonSchemaTestRunner {
         return dynamicTest("[$testFile] $name", file.absoluteFile.toURI()) {
             val preparedValue = prepareValue(value)
             val violations = testType.validate(preparedValue).also { println(it) }
-            assertEquals(expectValid, violations.isValid())
+            if (!expectValid) {
+                assertEquals(expectValid, violations.isValid())
+            } else {
+                assertEquals(expectValid, violations.isValid(), "$violations")
+            }
             assertEquals(expectValid, testType.isValid(preparedValue))
         }
     }
@@ -178,7 +186,7 @@ class IonSchemaTestRunner {
     private fun Violation.toIon(): IonStruct {
         val struct = ION.newEmptyStruct()
         if (constraint != null) {
-            val constr = constraint as IonValue
+            val constr = (ionStructOf(constraint!!).toIonValue(ION) as IonStruct).single()
             if (constr is IonStruct &&
                 !specialFieldNames.contains(constr.fieldName)
             ) {
@@ -186,7 +194,7 @@ class IonSchemaTestRunner {
             } else {
                 val constraintStruct = ION.newEmptyStruct()
                 constraintStruct.put(
-                    constr.fieldName ?: "type",
+                    constr.fieldName ?: "type+QWERTY99",
                     constr.clone()
                 )
                 struct.put("constraint", constraintStruct)

@@ -15,8 +15,7 @@
 
 package com.amazon.ionschema
 
-import com.amazon.ion.IonStruct
-import com.amazon.ion.IonValue
+import com.amazon.ionelement.api.*
 import com.amazon.ionschema.internal.util.truncate
 
 /**
@@ -114,7 +113,7 @@ open class Violations internal constructor (
  * @property[message] A description of the cause of the violation.
  */
 class Violation(
-    var constraint: IonValue? = null,
+    var constraint: StructField? = null,
     var code: String? = null,
     var message: String? = null
 ) : Violations()
@@ -130,20 +129,26 @@ class Violation(
 class ViolationChild internal constructor (
     val fieldName: String? = null,
     val index: Int? = null,
-    var value: IonValue? = null
+    var value: IonElement? = null
 ) : Violations() {
 
-    internal fun addValue(v: IonValue) {
+    internal fun addValue(v: IonElement, fieldName: String? = null) {
         if (value == null) {
             value = v
         } else {
-            if (v.fieldName != null) {
-                if (value !is IonStruct) {
-                    val tmp = value
-                    value = tmp!!.system.newEmptyStruct()
-                    (value as IonStruct).add(tmp.fieldName, tmp.clone())
+            if (fieldName != null) {
+                when (val maybeStruct = value) {
+                    is StructElement -> {
+                        value = ionStructOf(
+                            fields = maybeStruct.fields + field(fieldName, v),
+                            annotations = maybeStruct.annotations,
+                        )
+                    }
+                    else -> {
+                        val tmp = value!!
+                        value = ionStructOf(fieldName to tmp)
+                    }
                 }
-                (value as IonStruct).add(v.fieldName, v.clone())
             }
         }
     }

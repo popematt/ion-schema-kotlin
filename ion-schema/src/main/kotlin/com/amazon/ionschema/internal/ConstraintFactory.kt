@@ -15,7 +15,8 @@
 
 package com.amazon.ionschema.internal
 
-import com.amazon.ion.IonValue
+import com.amazon.ionelement.api.StructElement
+import com.amazon.ionelement.api.StructField
 import com.amazon.ionschema.Schema
 
 /**
@@ -29,8 +30,8 @@ internal interface ConstraintFactory {
 
     /**
      * Instantiates a new [Constraint] as defined by [ion].
-     * @param[ion] IonValue identifying the constraint to construct as well as its configuration
+     * @param[ion] IonElement identifying the constraint to construct as well as its configuration
      * @param[schema] passed to constraints that require a schema object
      */
-    fun constraintFor(ion: IonValue, schema: Schema): Constraint
+    fun constraintFor(field: StructField, container: StructElement, schema: Schema): Constraint
 }
