@@ -1,0 +1,4 @@
+{ time: 2022-01-02T03:04:05Z, message: "hello" }
+{ time: 2022-01-02T03:04:05Z, message: "world" }
+{ time: 2022-01-02T03:04:05Z, message: "bonjour" }
+{ time: 2022-01-02T03:04:05Z, message: "tout le monde" }
