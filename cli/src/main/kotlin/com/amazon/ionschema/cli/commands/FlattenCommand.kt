@@ -1,5 +1,6 @@
 package com.amazon.ionschema.cli.commands
 
+import com.amazon.ion.IonInt
 import com.amazon.ion.IonList
 import com.amazon.ion.IonStruct
 import com.amazon.ion.IonSymbol
@@ -13,6 +14,8 @@ import com.amazon.ionschema.IonSchemaSystemBuilder
 import com.amazon.ionschema.IonSchemaVersion
 import com.amazon.ionschema.ResourceAuthority
 import com.amazon.ionschema.Schema
+import com.amazon.ionschema.cli.merge.ConstraintBag
+import com.amazon.ionschema.cli.util.retain
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.arguments.check
@@ -24,6 +27,7 @@ import com.github.ajalt.clikt.parameters.options.multiple
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.types.enum
 import com.github.ajalt.clikt.parameters.types.file
+import java.math.BigInteger
 
 class FlattenCommand : CliktCommand() {
 
@@ -228,7 +232,7 @@ class FlattenCommand : CliktCommand() {
 
     private fun IonStruct.elideSingleTypeConstraint(): IonValue {
         return if (size() == 1 && containsKey("type")) {
-            this["type"]!!.clone().apply {
+            this["type"]!!.let { if (it is IonStruct) it.elideSingleTypeConstraint() else it }.clone().apply {
                 this@elideSingleTypeConstraint.typeAnnotations
                     .forEach { addTypeAnnotation(it) }
             }
@@ -259,7 +263,8 @@ class FlattenCommand : CliktCommand() {
             }
         }
 
-        return struct.cloneAndRetain().apply {
+        // cloneAndRetain so that we clone with type annotations.
+        val simplifiedType = struct.cloneAndRetain().apply {
             struct.forEach {
                 if (it is IonStruct) {
                     add(it.fieldName, it.elideSingleTypeConstraint().cloneIfParented())
@@ -268,17 +273,115 @@ class FlattenCommand : CliktCommand() {
                 }
             }
         }
+
+        simplifiedType.apply {
+            if (containsKey("fields")) {
+                val oldFieldsValues = filter { it.fieldName == "fields" }.filterIsInstance<IonStruct>()
+                val newFields = oldFieldsValues.fold(ion.newEmptyStruct()) { a, b -> mergeFieldsConstraints(a, b) }
+                removeAll("fields")
+                add("fields", newFields)
+            }
+        }
+        return simplifiedType
     }
 
-    private fun mergeFields(fieldsA: IonStruct, fieldsB: IonStruct): IonStruct? {
-        val fieldNames = fieldsA.map { it.fieldName }.toSet() + fieldsB.map { it.fieldName }.toSet()
+    private fun IonValue.isOptionalField(): Boolean {
+        if (this !is IonStruct) return true
+        return when (val occurs = this["occurs"]) {
+            is IonSymbol ->  occurs.stringValue() == "optional"
+            is IonInt -> false // occurs: 0 is not allowed, so any int must mean it's required
+            is IonList -> if (occurs[0] is IonSymbol) true else (occurs[0] as IonInt).let {
+                it.bigIntegerValue().equals(BigInteger.ZERO) && !it.hasTypeAnnotation("exclusive")
+            }
+            else -> true // Fields are optional by default
+        }
+    }
+
+    /**
+     * Returns null if merge results in `nothing`
+     */
+    private fun mergeFieldsConstraints(fieldsA: IonStruct, fieldsB: IonStruct): IonStruct? {
+        val fieldNamesA = fieldsA.map { it.fieldName }.toSet()
+        val fieldNamesB = fieldsB.map { it.fieldName }.toSet()
+        val aIsClosed = fieldsA.hasTypeAnnotation("closed")
+        val bIsClosed = fieldsB.hasTypeAnnotation("closed")
 
         val newFields = ion.newEmptyStruct()
 
-        fieldNames.forEach {
-        }
+        (fieldNamesA + fieldNamesB).forEach {
+            val a = fieldsA[it]
+            val b = fieldsB[it]
 
+            if (a == null) {
+                if (aIsClosed) {
+                    // Field name is present in B but not allowed in A
+                    if (b.isOptionalField()) {
+                        // Skip adding it
+                    } else {
+                        // Unsatisfiable requirement
+                        return null
+                    }
+                } else {
+                    newFields.add(it, b.clone())
+                }
+            } else if (b == null) {
+                if (bIsClosed) {
+                    // Field name is present in A but not allowed in B
+                    if (a.isOptionalField()) {
+                        // Skip adding it
+                    } else {
+                        // Unsatisfiable requirement
+                        return null
+                    }
+                } else {
+                    newFields.add(it, a.clone())
+                }
+            } else {
+                // Merge A and B
+                val newFieldType = mergeTypeReferences(normalizeTypeReference(a), normalizeTypeReference(b))
+                newFieldType ?: return null
+                newFields.add(it, newFieldType)
+            }
+        }
+        if (aIsClosed || bIsClosed) newFields.addTypeAnnotation("closed")
         return newFields
+    }
+
+    private fun normalizeTypeReference(ref: IonValue): IonStruct {
+        val newTypeRef = if (ref is IonSymbol) {
+            ion.newEmptyStruct().apply { add("type", ref.clone()) }
+        } else if (ref is IonStruct) {
+            if (ref.containsKey("id")) {
+                ion.newEmptyStruct().apply { add("type", ref.clone()) }
+            } else {
+                ref
+            }
+        } else {
+            TODO("Unreachable")
+        }
+        return if (ref.hasTypeAnnotation("\$null_or")) {
+            ion.newEmptyStruct().apply {
+                add("any_of").newEmptyList().apply {
+                    add().newSymbol("\$null")
+                    add(newTypeRef.clone().apply { clearTypeAnnotations() })
+                }
+            }
+        } else {
+            newTypeRef
+        }
+    }
+
+    @Suppress("NAME_SHADOWING")
+    private fun mergeTypeReferences(refA: IonStruct, refB: IonStruct): IonStruct? {
+        val refA = normalizeTypeReference(refA)
+        val refB = normalizeTypeReference(refB)
+
+        val newTypeRef = ion.newEmptyStruct()
+
+        refA.forEach { newTypeRef.add(it.fieldName, it.clone()) }
+        refB.forEach { newTypeRef.add(it.fieldName, it.clone()) }
+
+        return simplify(newTypeRef)
     }
 
     private fun determineIonTypeFromConstraints(struct: IonStruct): Pair<Set<IonType>, Boolean> {
@@ -330,8 +433,6 @@ class FlattenCommand : CliktCommand() {
         }
         return possibleTypes.toSet() to canBeNull
     }
-
-    private fun <E> MutableSet<E>.retain(vararg elements: E) = retainAll(elements)
 
     private fun IonValue.cloneIfParented() = cloneIf { it.container != null }
 
