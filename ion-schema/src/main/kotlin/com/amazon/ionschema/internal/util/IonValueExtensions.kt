@@ -16,6 +16,7 @@
 package com.amazon.ionschema.internal.util
 
 import com.amazon.ion.IonStruct
+import com.amazon.ion.IonType
 import com.amazon.ion.IonValue
 
 /**
@@ -44,3 +45,13 @@ internal fun <T : IonValue> T.markReadOnly(): T {
     this.makeReadOnly()
     return this
 }
+
+/**
+ * Returns the name of the Ion Type in terms of ISL types.
+ * Basically, this means that "DATAGRAM" is "document", and every other name is simply lowercase.
+ */
+internal val IonType.islName: String
+    get() = when (this) {
+        IonType.DATAGRAM -> "document"
+        else -> this.name.toLowerCase()
+    }
