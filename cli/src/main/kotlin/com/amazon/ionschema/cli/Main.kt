@@ -15,7 +15,7 @@
 
 package com.amazon.ionschema.cli
 
-import com.amazon.ionschema.cli.commands.FixSchemasCommand
+import com.amazon.ionschema.cli.commands.RepairCommand
 import com.amazon.ionschema.cli.commands.SymTabCommand
 import com.amazon.ionschema.cli.commands.ValidateCommand
 import com.github.ajalt.clikt.core.NoOpCliktCommand
@@ -38,7 +38,7 @@ class IonSchemaCli : NoOpCliktCommand(
         context {
             subcommands(
                 ValidateCommand(),
-                FixSchemasCommand(),
+                RepairCommand(),
                 SymTabCommand(),
             )
             versionOption(getVersionString())

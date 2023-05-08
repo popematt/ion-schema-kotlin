@@ -22,6 +22,7 @@ import com.amazon.ionschema.Schema
 import com.amazon.ionschema.cli.TransitiveImportRewriter.ImportStrategy.KeepSchemaImportsWriteTypeImports
 import com.amazon.ionschema.cli.TransitiveImportRewriter.ImportStrategy.RewriteAllAsTypeImports
 import com.amazon.ionschema.cli.TransitiveImportRewriter.ImportStrategy.WriteAllAsSchemaImports
+import com.amazon.ionschema.cli.util.StringPatcher
 import java.io.File
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -138,7 +139,7 @@ object TransitiveImportRewriter {
         if (!isExportOnlySchema(schema)) return null
 
         val exports = schema.getTypes().asSequence()
-            .filter { builtInTypesSchema.getType(it.name) == null && it.schemaId != null }
+            .filter { !isBuiltInTypeName(it.name) && it.schemaId != null }
             .map {
                 val alias = it.name
                 val name = it.isl.toIonElement().asStruct()["name"].textValue
@@ -270,7 +271,7 @@ object TransitiveImportRewriter {
             .filterIsInstance<TextElement>()
             .distinctBy { it.textValue }
             .filter { schema.getDeclaredType(it.textValue) == null }
-            .filter { builtInTypesSchema.getDeclaredType(it.textValue) == null }
+            .filter { !isBuiltInTypeName(it.textValue) }
             .map { schema.getType(it.textValue) }
             .map { createImportForType(it!!) }
             .toList()

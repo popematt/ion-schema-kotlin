@@ -1,4 +1,4 @@
-package com.amazon.ionschema.cli
+package com.amazon.ionschema.cli.util
 
 import java.util.TreeSet
 

@@ -1,4 +1,4 @@
-package com.amazon.ionschema.cli
+package com.amazon.ionschema.cli.util
 
 import java.util.TreeSet
 
@@ -29,5 +29,9 @@ class SchemaPatcher(val schemaId: String, val original: String) {
             cachedPatchCount = patchSet.size
         }
         return cachedString
+    }
+
+    fun toPatchSet() = PatchSet().apply {
+        patchSet.forEach { this.patch(it.start, it.endInclusive, it.replacementText) }
     }
 }

@@ -1,33 +1,17 @@
 package com.amazon.ionschema.cli.commands
 
 import com.amazon.ion.IonList
-import com.amazon.ion.IonStruct
-import com.amazon.ion.IonSymbol
-import com.amazon.ion.IonType
+import com.amazon.ion.IonSystem
 import com.amazon.ion.IonValue
 import com.amazon.ion.system.IonSystemBuilder
-import com.amazon.ionschema.AuthorityFilesystem
-import com.amazon.ionschema.IonSchemaSystem
-import com.amazon.ionschema.IonSchemaSystemBuilder
-import com.amazon.ionschema.IonSchemaVersion
-import com.amazon.ionschema.ResourceAuthority
-import com.amazon.ionschema.Schema
 import com.amazon.ionschema.Violations
-import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.arguments.argument
-import com.github.ajalt.clikt.parameters.arguments.check
 import com.github.ajalt.clikt.parameters.arguments.multiple
-import com.github.ajalt.clikt.parameters.groups.default
-import com.github.ajalt.clikt.parameters.groups.mutuallyExclusiveOptions
-import com.github.ajalt.clikt.parameters.options.convert
 import com.github.ajalt.clikt.parameters.options.flag
-import com.github.ajalt.clikt.parameters.options.multiple
 import com.github.ajalt.clikt.parameters.options.option
-import com.github.ajalt.clikt.parameters.types.enum
-import com.github.ajalt.clikt.parameters.types.file
 import kotlin.system.exitProcess
 
-class ValidateCommand : CliktCommand(
+class ValidateCommand : UsesType(
     help = "Validate Ion data for a given Ion Schema type.",
     epilog = """
         ```
@@ -64,66 +48,7 @@ class ValidateCommand : CliktCommand(
         ```
     """.trimIndent()
 ) {
-
-    private val ion = IonSystemBuilder.standard().build()
-
-    private val fileSystemAuthorities by option(
-        "-a", "--authority",
-        help = "The root(s) of the file system authority(s). " +
-            "Authorities are only required if you need to import a type from another " +
-            "schema file or if you are loading a schema using the --id option."
-    )
-        .file(canBeFile = false, mustExist = true, mustBeReadable = true)
-        .multiple()
-
-    private val useIonSchemaSchemaAuthority by option(
-        "-I", "--isl-for-isl",
-        help = "Indicates that the Ion Schema Schemas authority should be included in the schema system configuration."
-    ).flag()
-
-    val iss by lazy {
-        IonSchemaSystemBuilder.standard()
-            .apply {
-                withIonSystem(ion)
-                withAuthorities(fileSystemAuthorities.map { AuthorityFilesystem(it.path) })
-                if (useIonSchemaSchemaAuthority) addAuthority(ResourceAuthority.forIonSchemaSchemas())
-                allowTransitiveImports(false)
-            }
-            .build()
-    }
-
-    private val schema by mutuallyExclusiveOptions<IonSchemaSystem.() -> Schema>(
-
-        option("--id", help = "The ID of a schema to load from one of the configured authorities.")
-            .convert { { loadSchema(it) } },
-
-        option("--schema-text", "-t", help = "The Ion text contents of a schema document.")
-            .convert { { newSchema(it) } },
-
-        option("--schema-file", "-f", help = "A schema file")
-            .file(mustExist = true, mustBeReadable = true, canBeDir = false)
-            .convert { { newSchema(it.readText()) } },
-
-        option(
-            "-v", "--version",
-            help = "An empty schema document for the specified Ion Schema version. " +
-                "The version must be specified as X.Y; e.g. 2.0"
-        )
-            .enum<IonSchemaVersion> { it.name.drop(1).replace("_", ".") }
-            .convert { { newSchema(it.symbolText) } },
-
-        name = "Schema",
-        help = "All Ion Schema types are defined in the context of a schema document, so it is necessary to always " +
-            "have a schema document, even if that schema document is an implicit, empty schema. If a schema is " +
-            "not specified, the default is an implicit, empty Ion Schema 2.0 document."
-    ).default { newSchema(IonSchemaVersion.v2_0.symbolText) }
-
-    private val type by argument(help = "An ISL type name or inline type definition.")
-        .check(lazyMessage = { "Not a valid type reference: $it" }) {
-            with(ion.singleValue(it)) {
-                !isNullValue && type in listOf(IonType.SYMBOL, IonType.STRUCT)
-            }
-        }
+    override val ion: IonSystem = IonSystemBuilder.standard().build()
 
     private val isDocument by option(
         "-d", "--document",
@@ -149,14 +74,6 @@ class ValidateCommand : CliktCommand(
         .multiple()
 
     override fun run() {
-        val islSchema = iss.schema()
-
-        val typeIon = iss.ionSystem.singleValue(type)
-        val islType = if (typeIon is IonSymbol) {
-            islSchema.getType(typeIon.stringValue()) ?: throw IllegalArgumentException("Type not found: $type")
-        } else {
-            islSchema.newType(typeIon as IonStruct)
-        }
 
         val data = if (ionData.isEmpty()) readFromStdIn() else ionData.asSequence()
 
@@ -165,7 +82,7 @@ class ValidateCommand : CliktCommand(
 
         data.forEach {
             val result = parseIon(it)
-                .map { value -> islType.validate(value).toIon() }
+                .map { value -> type.validate(value).toIon() }
                 .getOrElse { convertErrorToIon(it) }
 
             if (result.hasTypeAnnotation("error")) {

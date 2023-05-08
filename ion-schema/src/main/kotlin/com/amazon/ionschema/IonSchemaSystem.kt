@@ -38,8 +38,6 @@ interface IonSchemaSystem {
      */
     val ionSystem: IonSystem
 
-    val builtInTypesSchema: Schema
-
     /**
      * Requests each of the provided [Authority]s, in order, to resolve
      * the requested schema id until one successfully resolves it.
