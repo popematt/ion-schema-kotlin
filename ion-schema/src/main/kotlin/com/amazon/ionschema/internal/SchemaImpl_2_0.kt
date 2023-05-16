@@ -89,6 +89,8 @@ internal class SchemaImpl_2_0 internal constructor(
             .asSequence()
             .associateBy { it.name }
 
+        islRequire(schemaContent.first().let { IonSchemaVersion.isVersionMarker(it) && it.stringValue() == IonSchemaVersion.v2_0.symbolText }) { "ISL 2.0 Schema must start with the version marker." }
+
         schemaContent.mapTo(isl) { it.clone() }
             .markReadOnly()
             .forEach {
