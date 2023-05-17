@@ -24,24 +24,17 @@ import java.util.stream.Stream
 class ReaderTests {
 
     val unimplementedConstraints = listOf(
-        "all_of",
         "annotations",
-        "any_of",
         "byte_length",
         "codepoint_length",
         "container_length",
         "contains",
-        "element",
         "exponent",
-        "field_names", // This is implemented, but it requires type args, which are not implemented yet.
         "fields",
-        "not",
-        "one_of",
         "ordered_elements",
         "precision",
         "timestamp_offset",
         "timestamp_precision",
-        "type",
         "utf8_byte_length",
         "valid_values",
     )
@@ -55,12 +48,13 @@ class ReaderTests {
             !it.path.contains(unimplementedConstraintsRegex) &&
                 !it.path.contains("schema/") &&
                 !it.path.contains("imports/") &&
-                !it.path.contains("open_content/") &&
-                !it.path.contains("null_or.isl")
+                !it.path.contains("open_content/")
         },
         testNameFilter = {
             // readNamedType() and readSchema() are not implemented yet
-            !it.contains("readNamedType") && !it.contains("readSchema")
+            !it.contains("readNamedType") && !it.contains("readSchema") &&
+                // Reading variably occurring types has not been implemented yet
+                !it.contains("variably occurring type")
         }
     )
 }

@@ -1,10 +1,15 @@
 package com.amazon.ionschema.reader.internal
 
 import com.amazon.ion.IonStruct
+import com.amazon.ion.IonSymbol
+import com.amazon.ion.IonText
 import com.amazon.ion.IonValue
+import com.amazon.ionschema.InvalidSchemaException
 import com.amazon.ionschema.IonSchemaVersion
+import com.amazon.ionschema.internal.util.getIslRequiredField
 import com.amazon.ionschema.internal.util.islRequire
 import com.amazon.ionschema.internal.util.islRequireIonTypeNotNull
+import com.amazon.ionschema.internal.util.islRequireOnlyExpectedFieldNames
 import com.amazon.ionschema.model.Constraint
 import com.amazon.ionschema.model.DiscreteIntRange
 import com.amazon.ionschema.model.ExperimentalIonSchemaModel
@@ -12,7 +17,10 @@ import com.amazon.ionschema.model.NamedTypeDefinition
 import com.amazon.ionschema.model.TypeArgument
 import com.amazon.ionschema.model.TypeDefinition
 import com.amazon.ionschema.model.VariablyOccurringTypeArgument
+import com.amazon.ionschema.reader.internal.constraints.ElementV2Reader
+import com.amazon.ionschema.reader.internal.constraints.FieldNamesReader
 import com.amazon.ionschema.reader.internal.constraints.Ieee754FloatReader
+import com.amazon.ionschema.reader.internal.constraints.LogicConstraintsReader
 import com.amazon.ionschema.reader.internal.constraints.RegexReader
 import com.amazon.ionschema.util.toBag
 
@@ -20,7 +28,10 @@ import com.amazon.ionschema.util.toBag
 internal class TypeReaderV2_0 : TypeReader {
 
     private val constraintReaders = listOf(
+        ElementV2Reader(this),
+        FieldNamesReader(this),
         Ieee754FloatReader(),
+        LogicConstraintsReader(this),
         RegexReader(IonSchemaVersion.v2_0),
     )
 
@@ -29,7 +40,31 @@ internal class TypeReaderV2_0 : TypeReader {
     }
 
     override fun readTypeArg(context: ReaderContext, ion: IonValue, checkAnnotations: Boolean): TypeArgument {
-        TODO()
+        if (checkAnnotations) islRequire(ion.typeAnnotations.isEmpty() || ion.typeAnnotations.single() == "\$null_or") {
+            "Invalid constraint; illegal annotation on type argument: $ion"
+        }
+        val nullability = if (ion.hasTypeAnnotation("\$null_or")) TypeArgument.Nullability.OrNull else TypeArgument.Nullability.None
+        return when {
+            ion is IonStruct && ion.containsKey("id") -> {
+                ion.islRequireOnlyExpectedFieldNames(listOf("id", "type"))
+                TypeArgument.Import(
+                    schemaId = ion.getIslRequiredField<IonText>("id").stringValue(),
+                    typeName = ion.getIslRequiredField<IonSymbol>("type").stringValue(),
+                    nullability = nullability,
+                ).also { context.unresolvedReferences.add(it) }
+            }
+            ion is IonStruct -> {
+                islRequire(!ion.containsKey("name")) { "Inline type definitions may not have a 'name' field" }
+                islRequire(!ion.containsKey("occurs")) { "Inline type definitions may not have a 'occurs' field" }
+
+                TypeArgument.InlineType(
+                    typeDefinition = privateReadTypeDefinition(context, ion),
+                    nullability = nullability,
+                )
+            }
+            ion is IonSymbol -> TypeArgument.Reference(ion.stringValue(), nullability).also { context.unresolvedReferences.add(it) }
+            else -> throw InvalidSchemaException("Invalid constraint; not a valid type argument: $ion")
+        }
     }
 
     override fun readVariablyOccurringTypeArg(context: ReaderContext, ion: IonValue, defaultOccurs: DiscreteIntRange): VariablyOccurringTypeArgument {
