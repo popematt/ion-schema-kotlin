@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License").
  * You may not use this file except in compliance with the License.
@@ -16,38 +16,42 @@
 buildscript {
     repositories {
         gradlePluginPortal()
+        mavenCentral()
     }
     dependencies {
-        classpath "org.jlleitschuh.gradle:ktlint-gradle:10.0.0"
-        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.6.20"
+        classpath("org.jlleitschuh.gradle:ktlint-gradle:10.0.0")
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:1.6.20")
     }
 }
 
 plugins {
-    id "org.jetbrains.kotlin.jvm" version "1.6.20" apply false
-    id "org.jlleitschuh.gradle.ktlint" version "10.0.0" apply false
-    id 'jacoco'
+    id("org.jetbrains.kotlin.jvm") version "1.6.20" apply false
+    id("org.jlleitschuh.gradle.ktlint") version "10.0.0" apply false
+    id("jacoco")
+    id("org.jetbrains.kotlinx.kover") version "0.7.0" apply false
 }
 
 allprojects {
 
-    apply plugin: "org.jlleitschuh.gradle.ktlint"
+    //apply(plugin: "org.jetbrains.kotlinx.kover")
+
+    apply("org.jlleitschuh.gradle.ktlint")
     ktlint {
         outputToConsole = true
     }
 
-    apply plugin: "jacoco"
+    apply("jacoco")
     jacoco {
-        toolVersion = '0.8.7'
+        toolVersion = "0.8.10"
         reportsDirectory = file("$buildDir/reports/jacoco/")
     }
 }
 
 subprojects {
-    group = 'com.amazon.ion'
+    group = "com.amazon.ion"
     ext.kotlin_version = "1.6.20"
 
-    apply plugin: "org.jetbrains.kotlin.jvm"
+    apply("org.jetbrains.kotlin.jvm")
     tasks.withType(Test) {
         useJUnitPlatform()
         jacocoTestReport {
@@ -62,7 +66,7 @@ subprojects {
     tasks.jacocoTestReport {
         dependsOn(tasks.test) // tests are required to run before generating the report
         doLast {
-            logger.quiet "Coverage report written to file://${reports.html.destination.toPath()}/index.html"
+            //logger.quiet "Coverage report written to file://${reports.html.destination.toPath()}/index.html"
         }
     }
 
@@ -72,35 +76,37 @@ subprojects {
         }
     }
 
-    def generatedVersionDir = "${buildDir}/generated-version"
+    val generatedVersionDir = "${buildDir}/generated-version"
 
-    plugins.withId('org.jetbrains.kotlin.jvm', { _ ->
+    plugins.withId("org.jetbrains.kotlin.jvm", { _ ->
         sourceSets {
             main {
-                output.dir(generatedVersionDir, builtBy: 'generateVersionAndHashProperties')
+                output.dir(generatedVersionDir, "generateVersionAndHashProperties")
             }
         }
+    })
 
+    tasks {
         // generates a build properties file with the current library version and most recent commit hash
-        task generateVersionAndHashProperties {
+        val generateVersionAndHashProperties = create {
             doLast {
-                def propertiesFile = file "$generatedVersionDir/${project.name}.properties"
+                val propertiesFile = file("$generatedVersionDir/${project.name}.properties")
                 propertiesFile.parentFile.mkdirs()
-                def properties = new Properties()
+                val properties = Properties()
 
                 // get current subproject version
                 properties.setProperty("version", version.toString())
 
                 // get most recent short commit hash
-                def commitHash = new ByteArrayOutputStream()
+                val commitHash = ByteArrayOutputStream()
                 exec {
-                    commandLine 'git', 'rev-parse', '--short', 'HEAD'
+                    commandLine("git", "rev-parse", "--short", "HEAD")
                     standardOutput = commitHash
                 }
                 properties.setProperty("commit", commitHash.toString().trim())
                 propertiesFile.withWriter { properties.store(it, null) }
             }
         }
-        processResources.dependsOn generateVersionAndHashProperties
-    })
+        processResources.dependsOn(generateVersionAndHashProperties)
+    }
 }

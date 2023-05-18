@@ -1,0 +1,27 @@
+# See https://docs.gradle.org/current/userguide/platforms.html#sub:conventional-dependencies-toml
+[versions]
+kotlin = "1.6.20"
+junit5 = "5.6.2"
+
+[libraries]
+clikt = "com.github.ajalt.clikt:clikt:3.2.0"
+ionelement = "com.amazon.ion:ion-element:1.+"
+ionjava = "com.amazon.ion:ion-java:1.+"
+test-junit-jupiter-api = { module = "org.junit.jupiter:junit-jupiter-api", version.ref = "junit5" }
+test-junit-jupiter-params = { module = "org.junit.jupiter:junit-jupiter-params", version.ref = "junit5" }
+test-junit-jupiter-engine = { module = "org.junit.jupiter:junit-jupiter-engine", version.ref = "junit5" }
+test-kotest-assertions = "io.kotest:kotest-assertions-core-jvm:[4.0,5.0["
+test-kotlintest = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
+test-mockk = "io.mockk:mockk:1.13.3"
+
+[bundles]
+test-junit5 = ["test-junit-jupiter-api", "test-junit-jupiter-params", "test-junit-jupiter-engine"]
+
+[plugins]
+dokka = { id = "org.jetbrains.dokka:dokka-gradle-plugin", version.ref = "kotlin" }
+kover = { id = "org.jetbrains.kotlinx.kover", version = "0.7.0" }
+ktlint = { id = "org.jlleitschuh.gradle:ktlint-gradle", version = "10.2.1" }
+
+# plugin("kotlinGradle", "org.jetbrains.kotlin:kotlin-gradle-plugin").versionRef(kotlin)
+
+
