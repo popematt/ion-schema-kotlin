@@ -1,5 +1,6 @@
 package com.amazon.ionschema.cli.util
 
+import com.amazon.ion.IonValue
 import com.amazon.ionelement.api.AnyElement
 import com.amazon.ionelement.api.ContainerElement
 import com.amazon.ionelement.api.IonElement
@@ -18,3 +19,6 @@ internal fun IonElement.recursivelyVisit(order: TraversalOrder, visitor: (AnyEle
         if (order is PostOrder) visitor(this)
     }
 }
+
+inline fun <reified T: IonValue> IonValue.tryInto() = this as? T
+inline fun <reified T: IonValue> IonValue.into() = this as T

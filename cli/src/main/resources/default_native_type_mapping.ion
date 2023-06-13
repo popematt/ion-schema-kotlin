@@ -1,0 +1,54 @@
+{
+  kotlin: {
+    bool: "kotlin.Boolean",
+    int: "java.math.BigInteger",
+    float: "kotlin.Double",
+    decimal: "java.math.BigDecimal",
+    timestamp: "com.amazon.ion.Timestamp",
+    string: "kotlin.String",
+    symbol: "kotlin.String",
+    blob: "kotlin.UByteArray",
+    clob: "kotlin.UByteArray",
+    list: "kotlin.collections.List",
+    sexp: "kotlin.collections.List",
+    struct: "kotlin.collections.Map",
+    text: "kotlin.Text",
+    lob: "kotlin.UByteArray",
+    any: "kotlin.Any",
+    nothing: "kotlin.Nothing",
+
+    $null: "com.amazon.ion.IonNull",
+    $bool: "com.amazon.ion.IonBool",
+    $int: "com.amazon.ion.IonInt",
+    $float: "com.amazon.ion.IonFloat",
+    $decimal: "com.amazon.ion.IonDecimal",
+    $timestamp: "com.amazon.ion.IonTimestamp",
+    $string: "com.amazon.ion.IonString",
+    $symbol: "com.amazon.ion.IonSymbol",
+    $blob: "com.amazon.ion.IonBlob",
+    $clob: "com.amazon.ion.IonClob",
+    $list: "com.amazon.ion.IonList",
+    $sexp: "com.amazon.ion.IonSexp",
+    $struct: "com.amazon.ion.IonStruct",
+    $number: "com.amazon.ion.IonNumber",
+    $text: "com.amazon.ion.IonText",
+    $lob: "com.amazon.ion.IonLob",
+    $any: "com.amazon.ion.IonValue",
+  }
+}
+
+//'commons/commons.isl'::{
+//  kotlin: {
+//    uint8: "kotlin.UByte",
+//    int8: "kotlin.Byte",
+//    uint16: "kotlin.UShort",
+//    int16: "kotlin.Short",
+//    uint32: "kotlin.UInt",
+//    int32: "kotlin.Int",
+//    uint64: "kotlin.ULong",
+//    int64: "kotlin.Long",
+//    float32: "kotlin.Float",
+//    float64: "kotlin.Double",
+//  }
+//}
+
