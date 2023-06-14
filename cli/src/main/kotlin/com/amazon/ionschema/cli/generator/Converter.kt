@@ -79,7 +79,7 @@ class Converter(val options: Options) {
 
 
     fun toTypeDomain(schemaDocuments: List<SchemaDocument>): TypeDomain {
-        val containers = schemaDocuments.map { it.toContainer() }
+        val containers = schemaDocuments.map { it.toTypeDomainNode() }
         val nativeTypeBindings = options.nativeTypeMappings.map {
             val baseId = it.schemaId?.let { options.schemaIdToModuleNamespaceStrategy(it) } ?: emptyList()
             Node(
@@ -92,7 +92,7 @@ class Converter(val options: Options) {
         return TypeDomain( nativeTypeBindings + containers)
     }
 
-    private fun SchemaDocument.toContainer(): Node {
+    private fun SchemaDocument.toTypeDomainNode(): Node {
         val schemaId = checkNotNull(this.id)
 
         val id = Id(options.schemaIdToModuleNamespaceStrategy(schemaId))
@@ -112,11 +112,11 @@ class Converter(val options: Options) {
                 }
             },
             selfType = null,
-            children = declaredTypes.map { (_, type) -> type.toContainer(id) }
+            children = declaredTypes.map { (_, type) -> type.toTypeDomainNode(id) }
         )
     }
 
-    private fun NamedTypeDefinition.toContainer(parentId: Id): Node {
+    private fun NamedTypeDefinition.toTypeDomainNode(parentId: Id): Node {
         val children = mutableListOf<Node>()
         val definition = typeDefinition.toEntityDefinition(parentId + getCodegenName(), children)
         return Node(
@@ -127,7 +127,7 @@ class Converter(val options: Options) {
         )
     }
 
-    private fun TypeArgument.InlineType.toContainer(id: Id): Node {
+    private fun TypeArgument.InlineType.toTypeDomainNode(id: Id): Node {
         val children = mutableListOf<Node>()
         val definition = typeDefinition.toEntityDefinition(id, children)
         return Node(
@@ -142,28 +142,17 @@ class Converter(val options: Options) {
     // TODO: Pass around a mutable list for children so that we can embed any inline type definitions.
 
     private fun TypeDefinition.toEntityDefinition(parentId: Id, children: MutableList<Node>): EntityDefinition {
-        /*
-        if (typeArg.typeDefinition.constraints.any { it is Constraint.Element }) {
-            if (typeArg.typeDefinition.constraints.any { it is Constraint.Type && it.type == TypeArgument.Reference("list") }) {
-                EntityReference.CollectionType()
-            } else if (typeArg.typeDefinition.constraints.any { it is Constraint.Type && it.type == TypeArgument.Reference("struct") }) {
-                EntityReference.MapType()
-            } else {
-                TODO()
-            }
-        }
-         */
         return when {
             // Native Type
             hasNativeTypeMapping(this) -> {
-                EntityDefinition.NativeType(this.getCodegenNativeTypeMapping()!!)
+                EntityDefinition.NativeType(this.getCodegenNativeTypeMapping()!!, this)
             }
             // Enum
             isEnum(constraints) -> {
                 EntityDefinition.EnumType(
                     constraints.filterIsInstance<Constraint.ValidValues>()
                         .single().values
-                        .map { (it as ValidValue.Value).value.into<IonText>().stringValue() })
+                        .map { (it as ValidValue.Value).value.into<IonText>().stringValue() }, this)
             }
             // Discriminated union
             hasSingleOneOfConstraint(constraints) -> {
@@ -177,29 +166,37 @@ class Converter(val options: Options) {
                     val ref = toEntityReference(parentId, variantName, it, children)
                     variantName to ref
                 }.toMap()
-                EntityDefinition.SumType(variants)
+                EntityDefinition.SumType(variants, this)
             }
             // Record type
             hasClosedFieldNamesConstraint(constraints) -> {
                 val fields = constraints.filterIsInstance<Constraint.Fields>().single().fields.mapValues { (fName, fType) ->
-                    val required = when (fType.occurs) {
-                        OCCURS_REQUIRED -> true
-                        OCCURS_OPTIONAL -> false
+                    val optional = when (fType.occurs) {
+                        OCCURS_REQUIRED -> false
+                        OCCURS_OPTIONAL -> true
                         else -> throw IllegalArgumentException("Codegen does not support fields that can occur more than once.")
                     }
                     toEntityReference(parentId, fName, fType.typeArg, children)
-                        .copy(optional = !required)
+                        .copy(optional = optional)
                 }
-                EntityDefinition.RecordType(fields)
+                EntityDefinition.RecordType(fields, this)
             }
-
+            // Scalars
+            isConstrainedScalar(constraints) -> {
+                EntityDefinition.ConstrainedScalarType(
+                    typeDefinition = this,
+                )
+            }
             // List/Map types
             isParameterizedList(constraints) -> {
                 EntityDefinition.ParameterizedType(
                     type = Id("list"),
-                    parameters = listOf(toEntityReference(parentId, "element", constraints.filterIsInstance<Constraint.Element>().single().type, children))
+                    parameters = listOf(toEntityReference(parentId, "element", constraints.filterIsInstance<Constraint.Element>().single().type, children)),
+                    typeDefinition = this,
                 )
             }
+            // TODO: Map type
+            // TODO: Set type?
 
 
             // TODO: Tuple type
@@ -207,6 +204,20 @@ class Converter(val options: Options) {
 
             else -> TODO("Something else? $this")
 
+        }
+    }
+
+    private fun isConstrainedScalar(constraints: Set<Constraint>): Boolean {
+        return constraints.any {
+            it is Constraint.Regex ||
+                    it is Constraint.CodepointLength ||
+                    it is Constraint.Utf8ByteLength ||
+                    it is Constraint.TimestampPrecision ||
+                    it is Constraint.TimestampOffset ||
+                    it is Constraint.Exponent ||
+                    it is Constraint.Precision ||
+                    it is Constraint.ByteLength ||
+                    it is Constraint.Ieee754Float
         }
     }
 
@@ -259,7 +270,7 @@ class Converter(val options: Options) {
                 // - Add the new container as a child of the current container
                 // - return the Appropriate type reference.
                 val name = typeArg.typeDefinition.getCodegenName() ?: refName
-                val container = typeArg.toContainer(parentId + name)
+                val container = typeArg.toTypeDomainNode(parentId + name)
                 children.add(container)
                 parentId + name
             }

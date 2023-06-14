@@ -2,12 +2,19 @@ package com.amazon.ionschema.cli.generator
 
 import com.amazon.ion.IonValue
 import com.amazon.ion.system.IonSystemBuilder
+import com.amazon.ionschema.model.ExperimentalIonSchemaModel
+import com.amazon.ionschema.model.TypeDefinition
 
 private val ION = IonSystemBuilder.standard().build()
 
-data class TypeDomain(
-    val entities: List<Node>,
-)
+data class TypeDomain(val entities: List<Node>) {
+
+    private fun Iterable<Node>.flatten(): List<Node> = flatMap { it.children.flatten() + it }
+
+    operator fun get(id: Id): Node? {
+        return entities.flatten().singleOrNull { it.id == id }
+    }
+}
 
 fun Node.toIon(): IonValue = ION.newEmptyStruct().apply {
     add("id", id.toIon())
@@ -45,10 +52,11 @@ fun EntityDefinition.toIon() = when (this) {
         add("type", this@toIon.type.toIon())
         add("parameters").newEmptyList().apply { parameters.forEach { add(it.toIon()) } }
     }
+    is EntityDefinition.ConstrainedScalarType -> ION.newSymbol("TODO") // TODO: implement this
 }
 fun MaybeId.toIon(): IonValue = ION.newEmptySexp().apply {
     addTypeAnnotation("maybe")
-    add(ref.toIon())
+    add(id.toIon())
     // TODO: nullable/optional
 }
 
@@ -76,27 +84,37 @@ data class Node(
  *   type of inheritance.
  * - Polymorphism is achieved by using discriminated unions.
  */
+@OptIn(ExperimentalIonSchemaModel::class)
 sealed class EntityDefinition {
-    // TODO: Interfaces; needs to have a `$codegen_implements` field in implementations
+    abstract val typeDefinition: TypeDefinition?
+
+    // TODO: Interfaces? Maybe needs to have a `$codegen_implements` field in implementations
     /** I.e. like a Java enum */
-    data class EnumType(val values: List<String>): EntityDefinition()
+    data class EnumType(val values: List<String>, override val typeDefinition: TypeDefinition? = null): EntityDefinition()
     /** AKA discriminated union (that can hold state); like a Rust enum or Kotlin sealed class */
-    data class SumType(val variants: Map<String, MaybeId>): EntityDefinition()
+    data class SumType(val variants: Map<String, MaybeId>, override val typeDefinition: TypeDefinition? = null): EntityDefinition()
     /** I.e. POJO, kotlin data class, etc. */
-    data class RecordType(val components: Map<String, MaybeId>): EntityDefinition()
+    data class RecordType(val components: Map<String, MaybeId>, override val typeDefinition: TypeDefinition? = null): EntityDefinition()
     /** I.e. like a Rust tuple struct */
-    data class TupleType(val components: List<MaybeId>): EntityDefinition()
+    data class TupleType(val components: List<MaybeId>, override val typeDefinition: TypeDefinition? = null): EntityDefinition()
     /** A type that is defined by a mapping to fully qualified type names in the target language. */
-    data class NativeType(val qualifiedNames: Map<String, String>): EntityDefinition()
+    data class NativeType(val qualifiedNames: Map<String, String>, override val typeDefinition: TypeDefinition? = null): EntityDefinition()
     /**
      * Parameterized type for e.g. maps, lists, etc.
      * Unlike NativeType, these are hard-coded for certain shapes that look like, e.g. a list, set, or map.
      */
-    data class ParameterizedType(val type: Id, val parameters: List<MaybeId>): EntityDefinition()
+    data class ParameterizedType(val type: Id, val parameters: List<MaybeId>, override val typeDefinition: TypeDefinition? = null): EntityDefinition()
+
+    /**
+     * Represents a type that is a scalar with some constraints. Some programming languages, such as Rust, can easily
+     * create type wrappers that implement these constraints. Other languages, such as Java, get way too verbose if you
+     * try to do that.
+     */
+    data class ConstrainedScalarType(override val typeDefinition: TypeDefinition): EntityDefinition()
 }
 
 /** Represents Optional AND nullable. Generators may choose to merge the two concepts or keep the separate. */
-data class MaybeId(val ref: Id, val optional: Boolean, val nullable: Boolean)
+data class MaybeId(val id: Id, val optional: Boolean, val nullable: Boolean)
 
 
 
