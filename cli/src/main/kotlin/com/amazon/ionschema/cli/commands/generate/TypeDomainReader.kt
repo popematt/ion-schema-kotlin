@@ -58,6 +58,7 @@ class TypeDomainReader(private val delegate: CliktCommand, private val ion: IonS
 
 
         val converter = Converter(
+            schemaDocuments,
             Converter.Options(
                 // TODO: make this configurable somehow
                 schemaIdToModuleNamespaceStrategy = {
@@ -68,6 +69,6 @@ class TypeDomainReader(private val delegate: CliktCommand, private val ion: IonS
             )
         )
 
-        return converter.toTypeDomain(schemaDocuments)
+        return converter.toTypeDomain()
     }
 }

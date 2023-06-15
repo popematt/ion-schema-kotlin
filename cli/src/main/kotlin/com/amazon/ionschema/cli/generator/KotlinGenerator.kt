@@ -1,7 +1,5 @@
 package com.amazon.ionschema.cli.generator
 
-import com.amazon.ion.IonType
-import com.amazon.ion.IonWriter
 import com.amazon.ionschema.cli.util.toCamelCase
 import com.amazon.ionschema.cli.util.toPascalCase
 import com.amazon.ionschema.cli.util.toScreamingSnakeCase
@@ -64,12 +62,11 @@ class KotlinGenerator(
                 // Package name
                 { getResolvedId(node.id.parentId()) + node.id.parts.joinToString(".") { it.toSnakeCase() } }
             }
-            is EntityDefinition.NativeType -> {
-                { node.selfType.qualifiedNames["kotlin"]!! }
-            }
+            is EntityDefinition.NativeType -> { { node.selfType.qualifiedNames["kotlin"]!!.fullyQualifiedTypeName } }
             is EntityDefinition.ParameterizedType -> {
                 { "${getResolvedId(node.selfType.type)}<${node.selfType.parameters.joinToString { generateCodeForMaybeId(it) }}>" }
             }
+            is EntityDefinition.ConstrainedScalarType -> { { getResolvedId(node.selfType.scalarType) } }
             else -> {
                 // Class Name
                 { resolvedIds[node.id.parentId()]!!() + "." + node.id.name.toPascalCase() }
@@ -97,7 +94,7 @@ class KotlinGenerator(
             is EntityDefinition.SumType -> generateSealedTypes(name, typeDef, nested)
             is EntityDefinition.RecordType -> generateRecord(name, typeDef, nested)
             is EntityDefinition.TupleType -> generateTuple(name, typeDef.components.mapIndexed { idx, it -> "component$idx" to it  }.toMap(), nested)
-            // Output nothing for constrained scalar types. Their constraints are added to builder functions.
+            // Output nothing for constrained scalar types. Their constraints are added to init blocks.
             is EntityDefinition.ConstrainedScalarType -> ""
             // Output nothing for anything else since we resolve this as type references
             is EntityDefinition.NativeType -> ""
@@ -112,16 +109,34 @@ class KotlinGenerator(
         else -> "in $start..$endInclusive"
     }
 
-    @OptIn(ExperimentalIonSchemaModel::class)
     private fun generateRecord(name: String, entityDefinition: EntityDefinition.RecordType, nested: String): String {
         val fields = entityDefinition.components.entries
         val visibility = if (options.publicTypes) "public" else "internal"
         val mut = if (options.immutableFields) "val" else "var"
         val generatedFields = fields.joinToString("\n") { (fName, ref) ->
-            "    $mut ${fName.toCamelCase()}: ${generateCodeForMaybeId(ref)},"
+            "|$mut ${fName.toCamelCase()}: ${generateCodeForMaybeId(ref)},"
         }
 
-        val initializer = fields.joinToString("\n") { (fName, ref) ->
+
+        return """
+        |${visibility} data class ${name}(
+        |    ${generatedFields.indentLines()}
+        |) {
+        |    ${generateDataClassInitBlock(entityDefinition.components).indentLines()}
+        |    
+        |    ${generateDataClassWriteToFunction(entityDefinition.components).indentLines()}
+        |    
+        |    ${generateBuilder(name, entityDefinition.components).indentLines()}
+        |    
+        |    ${nested.lines().joinToString("\n|    ")}
+        |}
+        """.trimMargin()
+    }
+
+    @OptIn(ExperimentalIonSchemaModel::class)
+    private fun generateDataClassInitBlock(fields: Map<String, MaybeId>): String {
+        val invariantCheckerCode = mutableListOf<String>()
+        fields.forEach { (fName, ref) ->
             val fieldName = fName.toCamelCase()
             val fieldConstraints = typeDomain[ref.id]?.selfType?.typeDefinition?.constraints ?: emptySet()
             val fieldConstraintsCode = fieldConstraints.joinToString("\n") {
@@ -139,7 +154,7 @@ class KotlinGenerator(
                         val rhs = it.range.toRHS()
                         """
                         val codepointLength = it.codePointCount(0, $fieldName.length)
-                        require(codepointLength $rhs) { "Value '${'$'}fieldName' is ${'$'}codepointLength codepoints; must be $rhs" }
+                        require(codepointLength $rhs) { "Value '$fieldName' is ${'$'}codepointLength codepoints; must be $rhs" }
                         """.trimIndent()
                     }
                     is Constraint.Regex -> {
@@ -149,90 +164,103 @@ class KotlinGenerator(
                         val i = if (it.caseInsensitive) "kotlin.text.RegexOption.IGNORE_CASE," else ""
                         """
                         val regex = kotlin.text.Regex("${it.pattern}", setOf($m $i))
-                        require(regex.matches(it)) { "Value '${'$'}fieldName' does not match regular expression: ${it.pattern}" }
+                        require(regex.matches(it)) { "Value '$fieldName' does not match regular expression: ${it.pattern}" }
                         """.trimIndent()
                     }
                     else -> ""
                 }
             }.trim()
+            val maybeNullSafe = if (ref.nullable || ref.optional) "?" else ""
             if (fieldConstraintsCode.isNotBlank()) {
-                """
-                |$fieldName?.let {
+                invariantCheckerCode += """
+                |$fieldName$maybeNullSafe.let {
                 |    ${fieldConstraintsCode.lines().joinToString("\n|    ")}
                 |}
-                """.trimMargin()
-            } else {
-                ""
+                """
             }
         }
+        return if (invariantCheckerCode.isEmpty()) {
+            ""
+        } else {
+            """
+            |init {
+            |    ${invariantCheckerCode.indentLines()}
+            |}
+            """
+        }
+    }
 
-
-        val generatedBuilderFields = fields.joinToString("\n") { (fName, ref) ->
+    private fun generateDataClassWriteToFunction(fields: Map<String, MaybeId>): String {
+        val fieldWriterCode = mutableListOf<String>()
+        fields.forEach { (fName, ref) ->
             val fieldName = fName.toCamelCase()
-            """
-            |    var $fieldName: ${getResolvedId(ref.id)}? = null
-            |    fun with${fName.toPascalCase()}($fieldName: ${generateCodeForMaybeId(ref)}) = apply {
-            |        this.$fieldName = $fieldName
-            |    }
-            """
-        }
-        val generatedConstructorArgs = fields.joinToString("\n") { (fName, ref) ->
-            val handleNull = if (ref.nullable || ref.optional) {
-                ""
+            val nullable = ref.nullable || ref.optional
+            val t = (typeDomain.get(ref.id)?.selfType as? EntityDefinition.NativeType)?.qualifiedNames?.get("kotlin")
+            val writeFn = if (t?.fullyQualifiedWriteFn != null) {
+                "${t.fullyQualifiedWriteFn}.invoke(ionWriter, $fieldName)"
             } else {
-                """ ?: throw IllegalArgumentException("${fName.toCamelCase()} cannot be null")"""
+                "$fieldName.writeTo(ionWriter)"
             }
-            """
-            |    ${fName.toCamelCase()} = this.${fName.toCamelCase()}$handleNull,
-            """
-        }
-        val builderCode = """
-        |class Builder {
-        $generatedBuilderFields
-        |
-        |    fun build() = $name(
-        |        $generatedConstructorArgs
-        |    )
-        |}
-        """.trimMargin()
 
-        val writeFields = fields.joinToString("\n") { (fName, ref) ->
-            val fieldName = fName.toCamelCase()
-            """
-            ionWriter.setFieldName("$fName")
-            if ($fieldName == null) {
-                ionWriter.writeNull()
+            fieldWriterCode += if (nullable) {
+                """
+                |ionWriter.setFieldName("$fName")
+                |if ($fieldName == null) ionWriter.writeNull() else $writeFn
+                """
             } else {
-                // TODO: handle primitives
-                $fieldName.writeTo(ionWriter)
+                """
+                |ionWriter.setFieldName("$fName")
+                |$writeFn
+                """
             }
-            """.trimIndent()
         }
 
         return """
-        |${visibility} data class ${name}(
-        |${generatedFields}
-        |) {
-        |    init {
-        |        ${initializer.lines().joinToString("\n|        ")}
+        |fun writeTo(ionWriter: com.amazon.ion.IonWriter) {
+        |    ionWriter.stepIn(com.amazon.ion.IonType.STRUCT)
+        |    try {
+        |        ${fieldWriterCode.indentLines(2)}
+        |    } finally {
+        |        ionWriter.stepOut()
         |    }
-        |    
-        |    fun writeTo(ionWriter: com.amazon.ion.IonWriter) {
-        |        ionWriter.stepIn(com.amazon.ion.IonType.STRUCT)
-        |        try {
-        |            $writeFields
-        |        } finally {
-        |            ionWriter.stepOut()
-        |        }
-        |    }
-        |    
-        |    
-        |    
-        |    ${nested.lines().joinToString("\n|    ")}
-        |    $builderCode
         |}
-        """.trimMargin()
+        """
     }
+
+    fun generateBuilder(name: String, fields: Map<String, MaybeId>): String {
+        val generatedBuilderVars = mutableListOf<String>()
+        val generatedBuilderFuns = mutableListOf<String>()
+        val generatedBuildCtorArgs = mutableListOf<String>()
+        fields.forEach { (fName, ref) ->
+            val fieldName = fName.toCamelCase()
+
+            generatedBuilderVars += """var $fieldName: ${getResolvedId(ref.id)}? = null"""
+            generatedBuilderFuns += """fun with${fName.toPascalCase()}($fieldName: ${generateCodeForMaybeId(ref)}) = apply { this.$fieldName = $fieldName }"""
+
+            val handleNull = if (ref.nullable || ref.optional) { "" } else { """ ?: throw IllegalArgumentException("${fName.toCamelCase()} cannot be null")""" }
+            generatedBuildCtorArgs += """${fName.toCamelCase()} = this.${fName.toCamelCase()}$handleNull,"""
+        }
+
+        return """
+        |class Builder {
+        |    ${generatedBuilderVars.joinWithMargin("""
+        |    """)}
+        |
+        |    ${generatedBuilderFuns.joinWithMargin("""
+        |    """)}
+        |
+        |    fun build() = $name(
+        |        ${generatedBuildCtorArgs.joinWithMargin("""
+        |        """)}
+        |    )
+        |}
+        """
+    }
+
+
+    private fun List<String>.joinWithMargin(margin: String): String = flatMap { it.lines() }.joinToString("") { margin + it }
+    private fun String.indentLines(i: Int = 1): String = replaceIndentByMargin("|" + ("    ".repeat(i))).trimStart { it == '|' || it.isWhitespace() }
+    private fun List<String>.indentLines(i: Int = 1): String = joinToString("\n") { it.replaceIndentByMargin("|" + ("    ".repeat(i))) }.trimStart { it == '|' || it.isWhitespace() }
 
     private fun generateTuple(name: String, fields: Map<String, MaybeId>, nested: String): String {
         val visibility = if (options.publicTypes) "public" else "internal"

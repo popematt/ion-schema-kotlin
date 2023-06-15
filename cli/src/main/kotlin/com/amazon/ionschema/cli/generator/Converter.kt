@@ -21,13 +21,29 @@ import com.amazon.ionschema.model.VariablyOccurringTypeArgument.Companion.OCCURS
 import com.amazon.ionschema.model.VariablyOccurringTypeArgument.Companion.OCCURS_REQUIRED
 
 @OptIn(ExperimentalIonSchemaModel::class)
-class Converter(val options: Options) {
+class Converter(private val schemaDocuments: List<SchemaDocument>, val options: Options) {
+    lateinit var scope: SchemaDocument
+
     data class Options(
         val nativeTypeMappings: List<NativeTypeMapping> = NativeTypeMapping.DEFAULT,
         val schemaIdToModuleNamespaceStrategy: (String) -> List<String>
     )
 
-    data class NativeTypeMapping(val schemaId: String?, val typeId: String, val mapping: Map<String, String>) {
+    data class NativeTypeBinding(
+        val fullyQualifiedTypeName: String,
+        /**
+         * See details of target language, but generally it should be a fully qualified reference to an invokable function
+         * that accepts an IonReader (by ref) and returns an instance of the type given in [fullyQualifiedTypeName].
+         */
+        val fullyQualifiedReadFn: String?,
+        /**
+         * See details of target language, but generally it should be a fully qualified reference to an invokable function
+         * that accepts an IonWriter (by ref) and an instance of the type given in [fullyQualifiedTypeName]  (by ref).
+         */
+        val fullyQualifiedWriteFn: String?,
+    )
+
+    data class NativeTypeMapping(val schemaId: String?, val typeId: String, val mapping: Map<String, NativeTypeBinding>) {
         companion object {
             private val ION = IonSystemBuilder.standard().build()
             @JvmStatic
@@ -39,13 +55,36 @@ class Converter(val options: Options) {
                     val schemaId = schemaStruct.typeAnnotations.singleOrNull()
                     schemaStruct.into<IonStruct>().flatMap { langStruct ->
                         val lang = langStruct.fieldName
-                        langStruct.into<IonStruct>().map { typeField -> Triple(typeField.fieldName, lang, typeField.into<IonString>().stringValue()) }
+                        langStruct.into<IonStruct>().map { typeField ->
+                            val binding = when (typeField) {
+                                is IonString -> NativeTypeBinding(typeField.stringValue(), null, null)
+                                is IonStruct -> NativeTypeBinding(
+                                    typeField["type"].into<IonString>().stringValue(),
+                                    typeField["read"]?.into<IonString>()?.stringValue(),
+                                    typeField["write"]?.into<IonString>()?.stringValue(),
+                                )
+                                else -> throw IllegalArgumentException("Not a valid native type binding: $typeField")
+                            }
+                            Triple(typeField.fieldName, lang, binding)
+                        }
                             .groupBy { (typeId, _, _) -> typeId }
                             .mapValues { (_, typeMapping) -> typeMapping.associate { (_, lang, qualifiedName) -> lang to qualifiedName }}
                             .map { (typeId, mapping) -> NativeTypeMapping(schemaId, typeId, mapping) }
                     }
                 }
                 .toList()
+        }
+    }
+
+    private fun readNativeTypeBinding(ion: IonValue): NativeTypeBinding {
+        return when (ion) {
+            is IonString -> NativeTypeBinding(ion.stringValue(), null, null)
+            is IonStruct -> NativeTypeBinding(
+                ion["type"].into<IonString>().stringValue(),
+                ion["read"]?.into<IonString>()?.stringValue(),
+                ion["write"]?.into<IonString>()?.stringValue(),
+            )
+            else -> throw IllegalArgumentException("Not a valid native type binding: $ion")
         }
     }
 
@@ -71,15 +110,18 @@ class Converter(val options: Options) {
     //val CODEGEN_TYPE = "\$codegen_type"
 
     fun OpenContentFields.getDocs(): String? = firstOrNull { it.first in DOC_FIELDS && it.second is IonText }?.second?.into<IonText>()?.stringValue()
-    fun TypeDefinition.getCodegenNativeTypeMapping(): Map<String, String>? = openContent.getAtMostOne(CODEGEN_USE)?.tryInto<IonStruct>()?.associate { it.fieldName to it.into<IonText>().stringValue() }
+    fun TypeDefinition.getCodegenNativeTypeMapping(): Map<String, NativeTypeBinding>? = openContent.getAtMostOne(CODEGEN_USE)?.tryInto<IonStruct>()?.associate { it.fieldName to readNativeTypeBinding(it) }
     fun NamedTypeDefinition.getCodegenName() = typeDefinition.getCodegenName() ?: typeName
     fun TypeDefinition.getCodegenIgnore() = openContent.getAtMostOne(CODEGEN_IGNORE)?.into<IonBool>()?.booleanValue()
     fun TypeDefinition.getCodegenName(): String? = openContent.getAtMostOne(CODEGEN_NAME)?.tryInto<IonText>()?.stringValue()
     fun OpenContentFields.getAtMostOne(name: String): IonValue? = filter { it.first == name }.also { check(it.size <= 1) }.singleOrNull()?.second
 
 
-    fun toTypeDomain(schemaDocuments: List<SchemaDocument>): TypeDomain {
-        val containers = schemaDocuments.map { it.toTypeDomainNode() }
+    fun toTypeDomain(): TypeDomain {
+        val containers = schemaDocuments.map {
+            scope = it
+            it.toTypeDomainNode()
+        }
         val nativeTypeBindings = options.nativeTypeMappings.map {
             val baseId = it.schemaId?.let { options.schemaIdToModuleNamespaceStrategy(it) } ?: emptyList()
             Node(
@@ -184,6 +226,8 @@ class Converter(val options: Options) {
             // Scalars
             isConstrainedScalar(constraints) -> {
                 EntityDefinition.ConstrainedScalarType(
+                    // TODO: replace with something more robust, e.g. that actually looks at the constraints
+                    scalarType = toEntityReference(parentId, "type", constraints.filterIsInstance<Constraint.Type>().single().type, children).id,
                     typeDefinition = this,
                 )
             }
@@ -209,14 +253,19 @@ class Converter(val options: Options) {
 
     private fun isConstrainedScalar(constraints: Set<Constraint>): Boolean {
         return constraints.any {
+            // Symbol/String
             it is Constraint.Regex ||
                     it is Constraint.CodepointLength ||
                     it is Constraint.Utf8ByteLength ||
+                    // Timestamp
                     it is Constraint.TimestampPrecision ||
                     it is Constraint.TimestampOffset ||
+                    // Decimal
                     it is Constraint.Exponent ||
                     it is Constraint.Precision ||
+                    // Blob/Clob
                     it is Constraint.ByteLength ||
+                    // Float
                     it is Constraint.Ieee754Float
         }
     }
@@ -259,7 +308,9 @@ class Converter(val options: Options) {
     ): MaybeId {
 
         val base = when (typeArg) {
-            is TypeArgument.Import -> TODO("Inline imports not supported for code gen yet.")
+            is TypeArgument.Import -> {
+                Id(options.schemaIdToModuleNamespaceStrategy(typeArg.schemaId) + typeArg.typeName)
+            }
             is TypeArgument.InlineType -> {
                 // Elide inline types that contain only `type`
                 if (typeArg.typeDefinition.constraints.singleOrNull() is Constraint.Type) {
@@ -274,7 +325,14 @@ class Converter(val options: Options) {
                 children.add(container)
                 parentId + name
             }
-            is TypeArgument.Reference -> Id(listOf(typeArg.typeName))
+            // TODO: Calculate the proper ID for locally referenced types
+            is TypeArgument.Reference -> {
+                if (typeArg.typeName in scope.declaredTypes.keys) {
+                    Id(options.schemaIdToModuleNamespaceStrategy(scope.id!!) + typeArg.typeName)
+                } else {
+                    Id(listOf(typeArg.typeName))
+                }
+            }
         }
         return MaybeId(base, optional = false, nullable = typeArg.nullability == TypeArgument.Nullability.OrNull)
     }

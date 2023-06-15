@@ -1,19 +1,45 @@
 {
   kotlin: {
-    bool: "kotlin.Boolean",
-    int: "java.math.BigInteger",
+    bool: {
+      type: "kotlin.Boolean",
+      // Fully qualified method reference for a function that accepts IonReader and returns Boolean
+      read: "com.amazon.ion.IonReader::booleanValue",
+      // Fully qualified method reference for a function that accepts IonWriter and Boolean
+      write: "com.amazon.ion.IonWriter::writeBool",
+    },
+    int: {
+      type: "java.math.BigInteger",
+      read: "com.amazon.ion.IonReader::bigIntegerValue",
+      write: "com.amazon.ion.IonWriter::writeInt",
+    },
     float: "kotlin.Double",
-    decimal: "java.math.BigDecimal",
+    decimal: {
+      type: "java.math.BigDecimal",
+      read: "com.amazon.ion.IonReader::bigDecimalValue",
+      write: "com.amazon.ion.IonWriter::writeDecimal",
+    },
     timestamp: "com.amazon.ion.Timestamp",
-    string: "kotlin.String",
-    symbol: "kotlin.String",
-    blob: "kotlin.UByteArray",
-    clob: "kotlin.UByteArray",
+    string: {
+      type: "kotlin.String",
+      read: "com.amazon.ion.IonReader::stringValue",
+      write: "com.amazon.ion.IonWriter::writeString",
+    },
+    symbol: {
+      type: "kotlin.String",
+      read: "com.amazon.ion.IonReader::stringValue",
+      write: "com.amazon.ion.IonWriter::writeString",
+    },
+    blob: "kotlin.ByteArray",
+    clob: "kotlin.ByteArray",
     list: "kotlin.collections.List",
     sexp: "kotlin.collections.List",
     struct: "kotlin.collections.Map",
-    text: "kotlin.Text",
+    // TODO: drop support for number?
+    number: "kotlin.Number",
+    // TODO: Pick either string or symbol
+    text: "kotlin.String",
     lob: "kotlin.UByteArray",
+    // TODO: drop support for these two?
     any: "kotlin.Any",
     nothing: "kotlin.Nothing",
 

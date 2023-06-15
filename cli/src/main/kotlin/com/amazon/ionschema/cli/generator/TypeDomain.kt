@@ -33,7 +33,7 @@ fun EntityDefinition.toIon() = when (this) {
     }
     is EntityDefinition.NativeType -> ION.newEmptyStruct().apply {
         addTypeAnnotation("native")
-        qualifiedNames.forEach { k, v -> add(k).newString(v) }
+        qualifiedNames.forEach { (k, v) -> add(k).newString(v.fullyQualifiedTypeName) }
     }
     is EntityDefinition.RecordType -> ION.newEmptyStruct().apply {
         addTypeAnnotation("record")
@@ -98,7 +98,7 @@ sealed class EntityDefinition {
     /** I.e. like a Rust tuple struct */
     data class TupleType(val components: List<MaybeId>, override val typeDefinition: TypeDefinition? = null): EntityDefinition()
     /** A type that is defined by a mapping to fully qualified type names in the target language. */
-    data class NativeType(val qualifiedNames: Map<String, String>, override val typeDefinition: TypeDefinition? = null): EntityDefinition()
+    data class NativeType(val qualifiedNames: Map<String, Converter.NativeTypeBinding>, override val typeDefinition: TypeDefinition? = null): EntityDefinition()
     /**
      * Parameterized type for e.g. maps, lists, etc.
      * Unlike NativeType, these are hard-coded for certain shapes that look like, e.g. a list, set, or map.
@@ -110,7 +110,7 @@ sealed class EntityDefinition {
      * create type wrappers that implement these constraints. Other languages, such as Java, get way too verbose if you
      * try to do that.
      */
-    data class ConstrainedScalarType(override val typeDefinition: TypeDefinition): EntityDefinition()
+    data class ConstrainedScalarType(val scalarType: Id, override val typeDefinition: TypeDefinition): EntityDefinition()
 }
 
 /** Represents Optional AND nullable. Generators may choose to merge the two concepts or keep the separate. */
