@@ -11,13 +11,20 @@ import java.nio.file.Path
 
 
 /**
- * ## Converter
- * Need to resolve type references
- * Everything is an ID mapped to a definition, represented as a tree
- *
  * ## Generator
  * - Makes a first pass to create the ID to fully qualified names cache
  * - Makes a second pass to generate the code
+ *
+ * ## Custom bindings
+ *
+ * Should implement the functions in this interface, but does not need to implement this exactly.
+ * ```
+ * interface Serde<T> {
+ *     fun writeTo(ionWriter: IonWriter, value: T)
+ *     fun readFrom(ionReader: IonReader): T
+ * }
+ * ```
+ *
  */
 class KotlinGenerator(
     private val typeDomain: TypeDomain,
@@ -126,6 +133,10 @@ class KotlinGenerator(
         |    
         |    ${generateDataClassWriteToFunction(entityDefinition.components).indentLines()}
         |    
+        |    companion object {
+        |        ${generateDataClassReadFromFunction(name, entityDefinition.components).indentLines(2)}
+        |    }
+        |    
         |    ${generateBuilder(name, entityDefinition.components).indentLines()}
         |    
         |    ${nested.lines().joinToString("\n|    ")}
@@ -195,9 +206,10 @@ class KotlinGenerator(
         fields.forEach { (fName, ref) ->
             val fieldName = fName.toCamelCase()
             val nullable = ref.nullable || ref.optional
-            val t = (typeDomain.get(ref.id)?.selfType as? EntityDefinition.NativeType)?.qualifiedNames?.get("kotlin")
-            val writeFn = if (t?.fullyQualifiedWriteFn != null) {
-                "${t.fullyQualifiedWriteFn}.invoke(ionWriter, $fieldName)"
+            val typeId = (typeDomain[ref.id]?.selfType as? EntityDefinition.ConstrainedScalarType)?.scalarType ?: ref.id
+            val t = (typeDomain[typeId]?.selfType as? EntityDefinition.NativeType)?.qualifiedNames?.get("kotlin")
+            val writeFn = if (t?.fullyQualifiedSerdeObject != null) {
+                "${t.fullyQualifiedSerdeObject}.writeTo(ionWriter, $fieldName)"
             } else {
                 "$fieldName.writeTo(ionWriter)"
             }
@@ -226,6 +238,55 @@ class KotlinGenerator(
         |}
         """
     }
+
+    private fun generateDataClassReadFromFunction(name: String, fields: Map<String, MaybeId>): String {
+        val fieldReaderCode = mutableListOf<String>()
+        fields.forEach { (fName, ref) ->
+            val nullable = ref.nullable || ref.optional
+            val typeId = (typeDomain[ref.id]?.selfType as? EntityDefinition.ConstrainedScalarType)?.scalarType ?: ref.id
+
+            val t = (typeDomain[typeId]?.selfType as? EntityDefinition.NativeType)?.qualifiedNames?.get("kotlin")
+            val readFn = if (t?.fullyQualifiedSerdeObject != null) {
+                "${t.fullyQualifiedSerdeObject}.readFrom(ionReader)"
+            } else {
+                "${getResolvedId(ref.id)}.readFrom(ionReader)"
+            }
+
+            val builderFn = "with${fName.toPascalCase()}"
+
+            fieldReaderCode += if (nullable) {
+                """
+                |"$fName" -> if (ionReader.isNullValue) builder.$builderFn(null) else builder.$builderFn($readFn)
+                """
+            } else {
+                """
+                |"$fName" -> builder.$builderFn($readFn)
+                """
+            }
+        }
+
+        // TODO: Ignore or fail on unknown fields?
+        return """
+        |@JvmStatic
+        |fun readFrom(ionReader: com.amazon.ion.IonReader): $name {
+        |    val builder = Builder()
+        |    // TODO: Set builder with default values
+        |    ionReader.stepIn()
+        |    try {
+        |        val next = ionReader.next()
+        |        while (next != null) {
+        |            when (ionReader.fieldName) {
+        |                ${fieldReaderCode.indentLines(4)}
+        |            }
+        |        }
+        |    } finally {
+        |        ionReader.stepOut()
+        |    }
+        |    return builder.build()
+        |}
+        """
+    }
+
 
     fun generateBuilder(name: String, fields: Map<String, MaybeId>): String {
         val generatedBuilderVars = mutableListOf<String>()
@@ -284,8 +345,11 @@ class KotlinGenerator(
         val (variants) = typeDef
         val interfaceOrAbstractClass = if (options.kotlinVersion.isAtLeast(1, 6)) "interface" else "class"
         val maybeInvokeConstructor = if (options.kotlinVersion.isAtLeast(1, 6)) "" else "()"
-        val variantClassType = if (options.useInlineWrappersForSealedTypes) {
-            if (options.kotlinVersion.isAtLeast(1, 5)) "value" else "inline"
+        val variantClassType = if (options.useInlineWrappersForSealedTypes && options.kotlinVersion.isAtLeast(1, 6)) {
+            // Value and inline classes can't extend an abstract class. However, they can implement a sealed interface,
+            // so even though value classes are available starting in Kotlin 1.5, our only option before Kotlin 1.6 is
+            // non-inline classes.
+            "@JvmInline value"
         } else {
             "data"
         }
@@ -385,10 +449,152 @@ class KotlinGenerator(
                 generatePackage(child)
             }
         }
+        generateUtilFile()
 //        if (content.isNotBlank()) {
 //            // Write a "generated.kt" file
 //        }
 
         return files
+    }
+
+
+    private fun generateUtilFile() {
+        val thisPackage = getResolvedId(Id()) + "__internal__"
+        val fileName = "generatedUtil.kt"
+
+        val content = """
+        |package $thisPackage
+        |
+        |import com.amazon.ion.IntegerSize
+        |import com.amazon.ion.IonReader
+        |import com.amazon.ion.IonType
+        |import com.amazon.ion.IonWriter
+        |import com.amazon.ion.Timestamp
+        |import java.math.BigDecimal
+        |import java.math.BigInteger
+        |
+        |interface Serde<T> {
+        |    fun writeTo(ionWriter: IonWriter, value: T)
+        |    fun readFrom(ionReader: IonReader): T
+        |}
+        |
+        |object StringSerde: Serde<String> {
+        |    override fun writeTo(ionWriter: IonWriter, value: String) = ionWriter.writeString(value)
+        |    override fun readFrom(ionReader: IonReader): String {
+        |        if(ionReader.type != com.amazon.ion.IonType.STRING) {
+        |            throw com.amazon.ion.IonException ("Expected a string but found a ${'$'}{ionReader.type}")
+        |        }
+        |        return ionReader.stringValue()
+        |    }
+        |}
+        |
+        |object SymbolSerde: Serde<String> {
+        |    override fun writeTo(ionWriter: IonWriter, value: String) = ionWriter.writeSymbol(value)
+        |    override fun readFrom(ionReader: IonReader): String {
+        |        if(ionReader.type != com.amazon.ion.IonType.SYMBOL) {
+        |            throw com.amazon.ion.IonException ("Expected a symbol but found a ${'$'}{ionReader.type}")
+        |        }
+        |        return ionReader.stringValue()
+        |    }
+        |}
+        |
+        |object DecimalSerde: Serde<BigDecimal> {
+        |    override fun writeTo(ionWriter: IonWriter, value: BigDecimal) = ionWriter.writeDecimal(value)
+        |    override fun readFrom(ionReader: IonReader): BigDecimal {
+        |        if(ionReader.type != com.amazon.ion.IonType.DECIMAL) {
+        |            throw com.amazon.ion.IonException ("Expected a decimal but found a ${'$'}{ionReader.type}")
+        |        }
+        |        return ionReader.bigDecimalValue()
+        |    }
+        |}
+        |
+        |object IntSerde: Serde<BigInteger> {
+        |    override fun writeTo(ionWriter: IonWriter, value: BigInteger) = ionWriter.writeInt(value)
+        |    override fun readFrom(ionReader: IonReader): BigInteger {
+        |        if(ionReader.type != com.amazon.ion.IonType.INT) {
+        |            throw com.amazon.ion.IonException ("Expected an int but found a ${'$'}{ionReader.type}")
+        |        }
+        |        return ionReader.bigIntegerValue()
+        |    }
+        |}
+        |
+        |object BoolSerde: Serde<Boolean> {
+        |    override fun writeTo(ionWriter: IonWriter, value: Boolean) = ionWriter.writeBool(value)
+        |    override fun readFrom(ionReader: IonReader): Boolean {
+        |        if(ionReader.type != com.amazon.ion.IonType.BOOL) {
+        |            throw com.amazon.ion.IonException ("Expected a BOOL but found a ${'$'}{ionReader.type}")
+        |        }
+        |        return ionReader.booleanValue()
+        |    }
+        |}
+        |object FloatSerde: Serde<Double> {
+        |    override fun writeTo(ionWriter: IonWriter, value: Double) = ionWriter.writeFloat(value)
+        |    override fun readFrom(ionReader: IonReader): Double {
+        |        if(ionReader.type != com.amazon.ion.IonType.FLOAT) {
+        |            throw com.amazon.ion.IonException ("Expected a FLOAT but found a ${'$'}{ionReader.type}")
+        |        }
+        |        return ionReader.doubleValue()
+        |    }
+        |}
+        |object TimestampSerde: Serde<Timestamp> {
+        |    override fun writeTo(ionWriter: IonWriter, value: Timestamp) = ionWriter.writeTimestamp(value)
+        |    override fun readFrom(ionReader: IonReader): Timestamp {
+        |        if(ionReader.type != com.amazon.ion.IonType.TIMESTAMP) {
+        |            throw com.amazon.ion.IonException ("Expected a TIMESTAMP but found a ${'$'}{ionReader.type}")
+        |        }
+        |        return ionReader.timestampValue()
+        |    }
+        |}
+        |object BlobSerde: Serde<ByteArray> {
+        |    override fun writeTo(ionWriter: IonWriter, value: ByteArray) = ionWriter.writeBlob(value)
+        |    override fun readFrom(ionReader: IonReader): ByteArray {
+        |        if(ionReader.type != com.amazon.ion.IonType.BLOB) {
+        |            throw com.amazon.ion.IonException ("Expected a BLOB but found a ${'$'}{ionReader.type}")
+        |        }
+        |        return ionReader.newBytes()
+        |    }
+        |}
+        |object ClobSerde: Serde<ByteArray> {
+        |    override fun writeTo(ionWriter: IonWriter, value: ByteArray) = ionWriter.writeClob(value)
+        |    override fun readFrom(ionReader: IonReader): ByteArray {
+        |        if(ionReader.type != com.amazon.ion.IonType.CLOB) {
+        |            throw com.amazon.ion.IonException ("Expected a CLOB but found a ${'$'}{ionReader.type}")
+        |        }
+        |        return ionReader.newBytes()
+        |    }
+        |}
+        |object NumberSerde: Serde<Number> {
+        |    override fun writeTo(ionWriter: IonWriter, value: Number) = when (value) {
+        |        is Double -> ionWriter.writeFloat(value)
+        |        is Float -> ionWriter.writeFloat(value.toDouble())
+        |        is Byte -> ionWriter.writeInt(value.toLong())
+        |        is Short -> ionWriter.writeInt(value.toLong())
+        |        is Int -> ionWriter.writeInt(value.toLong())
+        |        is Long -> ionWriter.writeInt(value)
+        |        is BigInteger -> ionWriter.writeInt(value)
+        |        is BigDecimal -> ionWriter.writeDecimal(value)
+        |        // TODO: Something less fragile than this
+        |        else -> ionWriter.writeDecimal(BigDecimal(value.toString()))
+        |    }
+        |        
+        |    override fun readFrom(ionReader: IonReader): Number {
+        |        return when (ionReader.type) {
+        |            IonType.INT -> {
+        |                when (ionReader.integerSize!!) {
+        |                    IntegerSize.BIG_INTEGER -> ionReader.bigIntegerValue()
+        |                    IntegerSize.INT -> ionReader.intValue()
+        |                    IntegerSize.LONG -> ionReader.longValue()
+        |                }
+        |            }
+        |            IonType.FLOAT -> ionReader.doubleValue()
+        |            IonType.DECIMAL -> ionReader.decimalValue()
+        |            else -> throw com.amazon.ion.IonException ("Expected a number but found a ${'$'}{ionReader.type}")
+        |        }
+        |    }
+        |}
+        |
+        """.trimMargin()
+
+        files.add(KotlinFile(thisPackage, fileName, content))
     }
 }

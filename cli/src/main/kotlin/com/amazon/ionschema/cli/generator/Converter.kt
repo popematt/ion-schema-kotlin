@@ -6,10 +6,13 @@ import com.amazon.ion.IonStruct
 import com.amazon.ion.IonText
 import com.amazon.ion.IonValue
 import com.amazon.ion.system.IonSystemBuilder
+import com.amazon.ionschema.InvalidSchemaException
 import com.amazon.ionschema.cli.util.into
+import com.amazon.ionschema.cli.util.isBuiltInTypeName
 import com.amazon.ionschema.cli.util.tryInto
 import com.amazon.ionschema.model.Constraint
 import com.amazon.ionschema.model.ExperimentalIonSchemaModel
+import com.amazon.ionschema.model.HeaderImport
 import com.amazon.ionschema.model.NamedTypeDefinition
 import com.amazon.ionschema.model.OpenContentFields
 import com.amazon.ionschema.model.SchemaDocument
@@ -31,23 +34,27 @@ class Converter(private val schemaDocuments: List<SchemaDocument>, val options: 
 
     data class NativeTypeBinding(
         val fullyQualifiedTypeName: String,
-        /**
-         * See details of target language, but generally it should be a fully qualified reference to an invokable function
-         * that accepts an IonReader (by ref) and returns an instance of the type given in [fullyQualifiedTypeName].
-         */
-        val fullyQualifiedReadFn: String?,
-        /**
-         * See details of target language, but generally it should be a fully qualified reference to an invokable function
-         * that accepts an IonWriter (by ref) and an instance of the type given in [fullyQualifiedTypeName]  (by ref).
-         */
-        val fullyQualifiedWriteFn: String?,
-    )
+        val fullyQualifiedSerdeObject: String?,
+    ) {
+        companion object {
+            fun readFrom(ion: IonValue): NativeTypeBinding {
+                return when (ion) {
+                    is IonString -> NativeTypeBinding(ion.stringValue(), null)
+                    is IonStruct -> NativeTypeBinding(
+                        ion["type"].into<IonString>().stringValue(),
+                        ion["serde"]?.into<IonString>()?.stringValue(),
+                    )
+                    else -> throw IllegalArgumentException("Not a valid native type binding: $ion")
+                }
+            }
+        }
+    }
 
     data class NativeTypeMapping(val schemaId: String?, val typeId: String, val mapping: Map<String, NativeTypeBinding>) {
         companion object {
             private val ION = IonSystemBuilder.standard().build()
             @JvmStatic
-            val DEFAULT: List<NativeTypeMapping> = this.javaClass.classLoader.getResourceAsStream("default_native_type_mapping.ion")
+            val DEFAULT: List<NativeTypeMapping> = this::class.java.classLoader.getResourceAsStream("default_native_type_mapping.ion")
                 .let { ION.newReader(it) }
                 .let { ION.iterate(it) }
                 .asSequence()
@@ -56,15 +63,7 @@ class Converter(private val schemaDocuments: List<SchemaDocument>, val options: 
                     schemaStruct.into<IonStruct>().flatMap { langStruct ->
                         val lang = langStruct.fieldName
                         langStruct.into<IonStruct>().map { typeField ->
-                            val binding = when (typeField) {
-                                is IonString -> NativeTypeBinding(typeField.stringValue(), null, null)
-                                is IonStruct -> NativeTypeBinding(
-                                    typeField["type"].into<IonString>().stringValue(),
-                                    typeField["read"]?.into<IonString>()?.stringValue(),
-                                    typeField["write"]?.into<IonString>()?.stringValue(),
-                                )
-                                else -> throw IllegalArgumentException("Not a valid native type binding: $typeField")
-                            }
+                            val binding = NativeTypeBinding.readFrom(typeField)
                             Triple(typeField.fieldName, lang, binding)
                         }
                             .groupBy { (typeId, _, _) -> typeId }
@@ -76,17 +75,7 @@ class Converter(private val schemaDocuments: List<SchemaDocument>, val options: 
         }
     }
 
-    private fun readNativeTypeBinding(ion: IonValue): NativeTypeBinding {
-        return when (ion) {
-            is IonString -> NativeTypeBinding(ion.stringValue(), null, null)
-            is IonStruct -> NativeTypeBinding(
-                ion["type"].into<IonString>().stringValue(),
-                ion["read"]?.into<IonString>()?.stringValue(),
-                ion["write"]?.into<IonString>()?.stringValue(),
-            )
-            else -> throw IllegalArgumentException("Not a valid native type binding: $ion")
-        }
-    }
+
 
     /**
      * Fields that code generator will check to find documentation. Plain text is recommended since code gen will not
@@ -110,7 +99,7 @@ class Converter(private val schemaDocuments: List<SchemaDocument>, val options: 
     //val CODEGEN_TYPE = "\$codegen_type"
 
     fun OpenContentFields.getDocs(): String? = firstOrNull { it.first in DOC_FIELDS && it.second is IonText }?.second?.into<IonText>()?.stringValue()
-    fun TypeDefinition.getCodegenNativeTypeMapping(): Map<String, NativeTypeBinding>? = openContent.getAtMostOne(CODEGEN_USE)?.tryInto<IonStruct>()?.associate { it.fieldName to readNativeTypeBinding(it) }
+    fun TypeDefinition.getCodegenNativeTypeMapping(): Map<String, NativeTypeBinding>? = openContent.getAtMostOne(CODEGEN_USE)?.tryInto<IonStruct>()?.associate { it.fieldName to NativeTypeBinding.readFrom(it) }
     fun NamedTypeDefinition.getCodegenName() = typeDefinition.getCodegenName() ?: typeName
     fun TypeDefinition.getCodegenIgnore() = openContent.getAtMostOne(CODEGEN_IGNORE)?.into<IonBool>()?.booleanValue()
     fun TypeDefinition.getCodegenName(): String? = openContent.getAtMostOne(CODEGEN_NAME)?.tryInto<IonText>()?.stringValue()
@@ -325,12 +314,34 @@ class Converter(private val schemaDocuments: List<SchemaDocument>, val options: 
                 children.add(container)
                 parentId + name
             }
-            // TODO: Calculate the proper ID for locally referenced types
             is TypeArgument.Reference -> {
                 if (typeArg.typeName in scope.declaredTypes.keys) {
                     Id(options.schemaIdToModuleNamespaceStrategy(scope.id!!) + typeArg.typeName)
-                } else {
+                } else if (isBuiltInTypeName(typeArg.typeName)) {
                     Id(listOf(typeArg.typeName))
+                } else {
+                    let {
+                        val imports = scope.header?.imports ?: emptySet()
+
+                        for (import in imports) {
+                            when (import) {
+                                is HeaderImport.Wildcard -> {
+                                    val from = schemaDocuments.single { it.id == import.id }
+                                    if (typeArg.typeName in from.declaredTypes.keys) {
+                                        return@let Id(options.schemaIdToModuleNamespaceStrategy(from.id!!) + typeArg.typeName)
+                                    }
+                                }
+                                is HeaderImport.Type -> {
+                                    val effectiveName = import.asType ?: import.targetType
+                                    if (effectiveName == typeArg.typeName) {
+                                        val from = schemaDocuments.single { it.id == import.id }
+                                        return@let Id(options.schemaIdToModuleNamespaceStrategy(from.id!!) + typeArg.typeName)
+                                    }
+                                }
+                            }
+                        }
+                        throw InvalidSchemaException("Unable to resolve type '${typeArg.typeName}'")
+                    }
                 }
             }
         }

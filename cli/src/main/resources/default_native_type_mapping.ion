@@ -2,43 +2,51 @@
   kotlin: {
     bool: {
       type: "kotlin.Boolean",
-      // Fully qualified method reference for a function that accepts IonReader and returns Boolean
-      read: "com.amazon.ion.IonReader::booleanValue",
-      // Fully qualified method reference for a function that accepts IonWriter and Boolean
-      write: "com.amazon.ion.IonWriter::writeBool",
+      serde: "com.amazon.kitchen.__internal__.BoolSerde",
     },
     int: {
       type: "java.math.BigInteger",
-      read: "com.amazon.ion.IonReader::bigIntegerValue",
-      write: "com.amazon.ion.IonWriter::writeInt",
+      serde: "com.amazon.kitchen.__internal__.IntSerde",
     },
-    float: "kotlin.Double",
+    float: {
+      type: "kotlin.Double",
+      serde: "com.amazon.kitchen.__internal__.FloatSerde",
+    },
     decimal: {
       type: "java.math.BigDecimal",
-      read: "com.amazon.ion.IonReader::bigDecimalValue",
-      write: "com.amazon.ion.IonWriter::writeDecimal",
+      serde: "com.amazon.kitchen.__internal__.DecimalSerde",
     },
-    timestamp: "com.amazon.ion.Timestamp",
+    timestamp: {
+      type: "com.amazon.ion.Timestamp",
+      serde: "com.amazon.kitchen.__internal__.TimestampSerde",
+    },
     string: {
       type: "kotlin.String",
-      read: "com.amazon.ion.IonReader::stringValue",
-      write: "com.amazon.ion.IonWriter::writeString",
+      serde: "com.amazon.kitchen.__internal__.StringSerde",
     },
     symbol: {
       type: "kotlin.String",
-      read: "com.amazon.ion.IonReader::stringValue",
-      write: "com.amazon.ion.IonWriter::writeString",
+      serde: "com.amazon.kitchen.__internal__.SymbolSerde",
     },
-    blob: "kotlin.ByteArray",
-    clob: "kotlin.ByteArray",
+    blob: {
+      type: "kotlin.ByteArray",
+      serde: "com.amazon.kitchen.__internal__.BlobSerde",
+    },
+    clob: {
+      type: "kotlin.ByteArray",
+      serde: "com.amazon.kitchen.__internal__.ClobSerde",
+    },
     list: "kotlin.collections.List",
     sexp: "kotlin.collections.List",
     struct: "kotlin.collections.Map",
     // TODO: drop support for number?
-    number: "kotlin.Number",
+    number: {
+      type: "kotlin.Number",
+      serde: "com.amazon.kitchen.__internal__.NumberSerde",
+    },
     // TODO: Pick either string or symbol
     text: "kotlin.String",
-    lob: "kotlin.UByteArray",
+    lob: "kotlin.ByteArray",
     // TODO: drop support for these two?
     any: "kotlin.Any",
     nothing: "kotlin.Nothing",
@@ -63,18 +71,18 @@
   }
 }
 
-//'commons/commons.isl'::{
-//  kotlin: {
-//    uint8: "kotlin.UByte",
-//    int8: "kotlin.Byte",
-//    uint16: "kotlin.UShort",
-//    int16: "kotlin.Short",
-//    uint32: "kotlin.UInt",
-//    int32: "kotlin.Int",
-//    uint64: "kotlin.ULong",
-//    int64: "kotlin.Long",
-//    float32: "kotlin.Float",
-//    float64: "kotlin.Double",
-//  }
-//}
+'commons/commons.isl'::{
+  kotlin: {
+    uint8: "kotlin.UByte",
+    int8: "kotlin.Byte",
+    uint16: "kotlin.UShort",
+    int16: "kotlin.Short",
+    uint32: "kotlin.UInt",
+    int32: "kotlin.Int",
+    uint64: "kotlin.ULong",
+    int64: "kotlin.Long",
+    float32: "kotlin.Float",
+    float64: "kotlin.Double",
+  }
+}
 
