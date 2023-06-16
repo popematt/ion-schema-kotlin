@@ -24,6 +24,12 @@ repositories {
     mavenCentral()
 }
 
+sourceSets {
+    test {
+        kotlin.srcDirs += "build/generated-sources/test/kotlin"
+    }
+}
+
 dependencies {
     implementation project(':ion-schema')
     implementation 'com.amazon.ion:ion-java:1.+'

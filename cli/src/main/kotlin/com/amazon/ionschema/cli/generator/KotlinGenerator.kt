@@ -105,7 +105,7 @@ class KotlinGenerator(
         return when(typeDef) {
             is EntityDefinition.EnumType -> generateEnumType(name, typeDef, nested)
             is EntityDefinition.SumType -> generateSealedTypes(name, typeDef, nested)
-            is EntityDefinition.RecordType -> generateRecord(name, typeDef, nested)
+            is EntityDefinition.RecordType -> generateDataClassForRecordType(name, typeDef, nested)
             is EntityDefinition.TupleType -> generateTuple(name, typeDef.components.mapIndexed { idx, it -> "component$idx" to it  }.toMap(), nested)
             // Output nothing for constrained scalar types. Their constraints are added to init blocks.
             is EntityDefinition.ConstrainedScalarType -> ""
@@ -124,7 +124,7 @@ class KotlinGenerator(
         else -> "in $start..$endInclusive"
     }
 
-    private fun generateRecord(name: String, entityDefinition: EntityDefinition.RecordType, nested: String): String {
+    private fun generateDataClassForRecordType(name: String, entityDefinition: EntityDefinition.RecordType, nested: String): String {
         val fields = entityDefinition.components.entries
         val visibility = if (options.publicTypes) "public" else "internal"
         val mut = if (options.immutableFields) "val" else "var"
@@ -142,6 +142,9 @@ class KotlinGenerator(
         |    ${generateDataClassWriteToFunction(entityDefinition.components).indentLines()}
         |    
         |    companion object {
+        |        @JvmStatic
+        |        fun builder() = Builder()
+        |    
         |        ${generateDataClassReadFromFunction(name, entityDefinition.components).indentLines(2)}
         |    }
         |    
@@ -281,7 +284,7 @@ class KotlinGenerator(
             // TODO: Add support for sets or other collection types
             """
             |
-            |mutableListOf<kotlin.String>().apply {
+            |mutableListOf<${generateCodeForMaybeId(actualType.item)}>().apply {
             |    check(ionReader.type == com.amazon.ion.IonType.LIST)
             |    ionReader.stepIn()
             |    try {
@@ -320,8 +323,7 @@ class KotlinGenerator(
         |    // TODO: Set builder with default values
         |    ionReader.stepIn()
         |    try {
-        |        val next = ionReader.next()
-        |        while (next != null) {
+        |        while (ionReader.next() != null) {
         |            when (ionReader.fieldName) {
         |                ${fieldReaderCode.indentLines(4)}
         |            }
@@ -342,7 +344,7 @@ class KotlinGenerator(
         fields.forEach { (fName, ref) ->
             val fieldName = fName.toCamelCase()
 
-            generatedBuilderVars += """var $fieldName: ${getResolvedId(ref.id)}? = null"""
+            generatedBuilderVars += """private var $fieldName: ${getResolvedId(ref.id)}? = null"""
             generatedBuilderFuns += """fun with${fName.toPascalCase()}($fieldName: ${generateCodeForMaybeId(ref)}) = apply { this.$fieldName = $fieldName }"""
 
             val handleNull = if (ref.nullable || ref.optional) { "" } else { """ ?: throw IllegalArgumentException("${fName.toCamelCase()} cannot be null")""" }

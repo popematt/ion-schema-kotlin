@@ -14,14 +14,6 @@ class GeneratorTest {
     fun testGenerator() {
 
         val reader = IonSchemaReaderV2_0()
-        val converter = Converter(Converter.Options(
-            schemaIdToModuleNamespaceStrategy = {
-                (if (it.endsWith(".isl")) it.dropLast(4) else it)
-                    .split("/", "\\")
-                    .map { it.replace(Regex("[^\\w\\d_]"), "") }
-            }
-        ))
-
 
         val schemaDocument = reader.readSchemaOrThrow(ION.loader.load("""
             ${'$'}ion_schema_2_0
@@ -45,7 +37,15 @@ class GeneratorTest {
             }
         """.trimIndent())).copy(id = "popematt/types.isl")
 
-        val typeDomain = converter.toTypeDomain(listOf(schemaDocument))
+        val converter = Converter(listOf(schemaDocument), Converter.Options(
+            schemaIdToModuleNamespaceStrategy = {
+                (if (it.endsWith(".isl")) it.dropLast(4) else it)
+                    .split("/", "\\")
+                    .map { it.replace(Regex("[^\\w\\d_]"), "") }
+            }
+        ))
+
+        val typeDomain = converter.toTypeDomain()
 
         val kotlinGenerator = KotlinGenerator(
             typeDomain = typeDomain,
