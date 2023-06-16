@@ -4,6 +4,7 @@ import com.amazon.ion.IonBool
 import com.amazon.ion.IonString
 import com.amazon.ion.IonStruct
 import com.amazon.ion.IonText
+import com.amazon.ion.IonType
 import com.amazon.ion.IonValue
 import com.amazon.ion.system.IonSystemBuilder
 import com.amazon.ionschema.InvalidSchemaException
@@ -22,7 +23,12 @@ import com.amazon.ionschema.model.TypeDefinition
 import com.amazon.ionschema.model.ValidValue
 import com.amazon.ionschema.model.VariablyOccurringTypeArgument.Companion.OCCURS_OPTIONAL
 import com.amazon.ionschema.model.VariablyOccurringTypeArgument.Companion.OCCURS_REQUIRED
+import com.amazon.ionschema.model.mapToSet
+import com.amazon.ionschema.util.toBag
 
+/**
+ *
+ */
 @OptIn(ExperimentalIonSchemaModel::class)
 class Converter(private val schemaDocuments: List<SchemaDocument>, val options: Options) {
     lateinit var scope: SchemaDocument
@@ -123,6 +129,9 @@ class Converter(private val schemaDocuments: List<SchemaDocument>, val options: 
         return TypeDomain( nativeTypeBindings + containers)
     }
 
+    /**
+     * This is where the real substance of the conversion begins.
+     */
     private fun SchemaDocument.toTypeDomainNode(): Node {
         val schemaId = checkNotNull(this.id)
 
@@ -147,9 +156,170 @@ class Converter(private val schemaDocuments: List<SchemaDocument>, val options: 
         )
     }
 
+
+    private fun flattenTypeArg(currentSchema: SchemaDocument, argument: TypeArgument): TypeDefinition? {
+        return when (argument) {
+            is TypeArgument.Import -> {
+                val importFrom = schemaDocuments.single { it.id == argument.schemaId }
+                importFrom.declaredTypes[argument.typeName]!!.typeDefinition.flatten(importFrom)
+            }
+            is TypeArgument.InlineType -> {
+                argument.typeDefinition.flatten(currentSchema)
+            }
+            is TypeArgument.Reference -> {
+                if (argument.typeName in currentSchema.declaredTypes.keys) {
+                    currentSchema.declaredTypes[argument.typeName]!!.typeDefinition
+                } else if (isBuiltInTypeName(argument.typeName)) {
+                    null
+                } else {
+                    let {
+                        val imports = scope.header?.imports ?: emptySet()
+                        for (import in imports) {
+                            when (import) {
+                                is HeaderImport.Wildcard -> {
+                                    val from = schemaDocuments.single { it.id == import.id }
+                                    if (argument.typeName in from.declaredTypes.keys) {
+                                        return@let from.declaredTypes[argument.typeName]!!.typeDefinition
+                                    }
+                                }
+                                is HeaderImport.Type -> {
+                                    val effectiveName = import.asType ?: import.targetType
+                                    if (effectiveName == argument.typeName) {
+                                        return@let schemaDocuments.single { it.id == import.id }.declaredTypes[effectiveName]!!.typeDefinition
+                                    }
+                                }
+                            }
+                        }
+                        throw InvalidSchemaException("Unable to resolve type '${argument.typeName}'")
+                    }
+                }
+            }
+        }
+
+    }
+
+    private fun TypeDefinition.flatten(currentSchema: SchemaDocument): TypeDefinition {
+
+        val newConstraints = mutableListOf<Constraint>()
+        val newOpenContent = mutableListOf<Pair<String, IonValue>>()
+        newOpenContent += openContent
+
+        for (c in constraints) when (c) {
+            is Constraint.Type -> {
+                val typeDefinition = flattenTypeArg(currentSchema, c.type)
+                if (typeDefinition == null) {
+                    newConstraints.add(c)
+                } else {
+                    newConstraints.addAll(typeDefinition.constraints)
+                    newOpenContent.addAll(typeDefinition.openContent)
+                }
+            }
+            is Constraint.AllOf -> {
+                c.types.forEach {
+                    val typeDefinition = flattenTypeArg(currentSchema, it)
+                    if (typeDefinition == null) {
+                        newConstraints.add(Constraint.Type(it))
+                    } else {
+                        newConstraints.addAll(typeDefinition.constraints)
+                        newOpenContent.addAll(typeDefinition.openContent)
+                    }
+                }
+            }
+//            is Constraint.Not -> {
+//                val typeDefinition = flattenTypeArg(currentSchema, c.type)
+//                if (typeDefinition == null) {
+//                    newConstraints.add(c)
+//                } else {
+//                    newConstraints.add(c.copy(type = TypeArgument.InlineType(typeDefinition)))
+//                }
+//            }
+//            is Constraint.AnyOf -> {
+//                newConstraints.add(c.copy(types = c.types.mapToSet {
+//                    val typeDefinition = flattenTypeArg(currentSchema, it)
+//                    if (typeDefinition == null) {
+//                        it
+//                    } else {
+//                        TypeArgument.InlineType(typeDefinition)
+//                    }
+//                }))
+//            }
+//            is Constraint.OneOf -> {
+//                newConstraints.add(c.copy(types = c.types.mapToSet {
+//                    val typeDefinition = flattenTypeArg(currentSchema, it)
+//                    if (typeDefinition == null) {
+//                        it
+//                    } else {
+//                        TypeArgument.InlineType(typeDefinition)
+//                    }
+//                }))
+//            }
+//            is Constraint.Element -> {
+//                val typeDefinition = flattenTypeArg(currentSchema, c.type)
+//                if (typeDefinition == null) {
+//                    newConstraints.add(c)
+//                } else {
+//                    newConstraints.add(c.copy(type = TypeArgument.InlineType(typeDefinition)))
+//                }
+//            }
+//            is Constraint.AnnotationsV2 -> {
+//                val typeDefinition = flattenTypeArg(currentSchema, c.type)
+//                if (typeDefinition == null) {
+//                    newConstraints.add(c)
+//                } else {
+//                    newConstraints.add(c.copy(type = TypeArgument.InlineType(typeDefinition)))
+//                }
+//            }
+//            is Constraint.FieldNames -> {
+//                val typeDefinition = flattenTypeArg(currentSchema, c.type)
+//                if (typeDefinition == null) {
+//                    newConstraints.add(c)
+//                } else {
+//                    newConstraints.add(c.copy(type = TypeArgument.InlineType(typeDefinition)))
+//                }
+//            }
+//            is Constraint.Fields -> {
+//                newConstraints.add(c.copy(fields = c.fields.mapValues {(_, it) ->
+//                    val typeDefinition = flattenTypeArg(currentSchema, it.typeArg)
+//                    if (typeDefinition == null) {
+//                        it
+//                    } else {
+//                        it.copy(typeArg = TypeArgument.InlineType(typeDefinition))
+//                    }
+//                }))
+//            }
+//            is Constraint.OrderedElements -> {
+//                newConstraints.add(c.copy(types = c.types.map {
+//                    val typeDefinition = flattenTypeArg(currentSchema, it.typeArg)
+//                    if (typeDefinition == null) {
+//                        it
+//                    } else {
+//                        it.copy(typeArg = TypeArgument.InlineType(typeDefinition))
+//                    }
+//                }))
+//            }
+            else -> newConstraints.add(c)
+        }
+        return TypeDefinition(newConstraints.toSet(), newOpenContent.toBag())
+    }
+
+
+    /**
+     * Merges similar constraints
+     */
+    private fun TypeDefinition.merge(): TypeDefinition {
+        TODO()
+    }
+
+    /**
+     * Infers the possible Ion types from the constraints
+     */
+    private fun TypeDefinition.inferIonType(): Set<IonType> {
+        TODO()
+    }
+
     private fun NamedTypeDefinition.toTypeDomainNode(parentId: Id): Node {
         val children = mutableListOf<Node>()
-        val definition = typeDefinition.toEntityDefinition(parentId + getCodegenName(), children)
+        val definition = typeDefinition.flatten(scope).toEntityDefinition(parentId + getCodegenName(), children)
         return Node(
             id = parentId + getCodegenName(),
             selfType = definition,
@@ -160,7 +330,7 @@ class Converter(private val schemaDocuments: List<SchemaDocument>, val options: 
 
     private fun TypeArgument.InlineType.toTypeDomainNode(id: Id): Node {
         val children = mutableListOf<Node>()
-        val definition = typeDefinition.toEntityDefinition(id, children)
+        val definition = typeDefinition.flatten(scope).toEntityDefinition(id, children)
         return Node(
             id = id,
             selfType = definition,
@@ -220,11 +390,11 @@ class Converter(private val schemaDocuments: List<SchemaDocument>, val options: 
                     typeDefinition = this,
                 )
             }
-            // List/Map types
+            // Lists
             isParameterizedList(constraints) -> {
-                EntityDefinition.ParameterizedType(
+                EntityDefinition.CollectionType(
                     type = Id("list"),
-                    parameters = listOf(toEntityReference(parentId, "element", constraints.filterIsInstance<Constraint.Element>().single().type, children)),
+                    item = toEntityReference(parentId, "element", constraints.filterIsInstance<Constraint.Element>().single().type, children),
                     typeDefinition = this,
                 )
             }
@@ -233,6 +403,8 @@ class Converter(private val schemaDocuments: List<SchemaDocument>, val options: 
 
 
             // TODO: Tuple type
+            // Tuple type must be able to handle occurs with any arbitrary value
+            // Should be the default if there's an ordered elements constraint
 
 
             else -> TODO("Something else? $this")

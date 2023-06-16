@@ -36,7 +36,10 @@
       type: "kotlin.ByteArray",
       serde: "com.amazon.kitchen.__internal__.ClobSerde",
     },
-    list: "kotlin.collections.List",
+    list: {
+      type: "kotlin.collections.List",
+      serde: "com.amazon.kitchen.__internal__.ListSerde",
+    },
     sexp: "kotlin.collections.List",
     struct: "kotlin.collections.Map",
     // TODO: drop support for number?

@@ -73,6 +73,12 @@ class KotlinGenerator(
             is EntityDefinition.ParameterizedType -> {
                 { "${getResolvedId(node.selfType.type)}<${node.selfType.parameters.joinToString { generateCodeForMaybeId(it) }}>" }
             }
+            is EntityDefinition.CollectionType -> {
+                { "${getResolvedId(node.selfType.type)}<${generateCodeForMaybeId(node.selfType.item)}>" }
+            }
+            is EntityDefinition.AssociationType -> {
+                { "${getResolvedId(node.selfType.type)}<${generateCodeForMaybeId(node.selfType.key)},${generateCodeForMaybeId(node.selfType.value)}>" }
+            }
             is EntityDefinition.ConstrainedScalarType -> { { getResolvedId(node.selfType.scalarType) } }
             else -> {
                 // Class Name
@@ -106,6 +112,8 @@ class KotlinGenerator(
             // Output nothing for anything else since we resolve this as type references
             is EntityDefinition.NativeType -> ""
             is EntityDefinition.ParameterizedType -> ""
+            is EntityDefinition.CollectionType -> ""
+            is EntityDefinition.AssociationType -> ""
         }
     }
 
@@ -201,30 +209,51 @@ class KotlinGenerator(
         }
     }
 
+
+    private fun generateMemberWriter(ref: MaybeId, variableName: String): String {
+        val nullable = ref.nullable || ref.optional
+        val typeId = (typeDomain[ref.id]?.selfType as? EntityDefinition.ConstrainedScalarType)?.scalarType ?: ref.id
+        val actualType = typeDomain[typeId]!!.selfType
+        val nonNullWriteFn = if ((actualType as? EntityDefinition.NativeType)?.qualifiedNames?.get("kotlin") != null) {
+            val t = actualType.qualifiedNames.get("kotlin")!!
+            "${t.fullyQualifiedSerdeObject}.writeTo(ionWriter, $variableName)"
+        } else if (actualType is EntityDefinition.CollectionType) {
+            val elementWriterFn = generateMemberWriter(actualType.item, "it")
+            """
+            ionWriter.stepIn(com.amazon.ion.IonType.LIST)
+            try {
+                $variableName.forEach { 
+                    $elementWriterFn 
+                }
+            } finally {
+                ionWriter.stepOut()
+            }
+            """.trimIndent()
+        } else {
+            "$variableName.writeTo(ionWriter)"
+        }
+
+        return if (nullable) {
+            """
+            if ($variableName == null) ionWriter.writeNull() else {
+                $nonNullWriteFn
+            }
+            """.trimIndent()
+        } else {
+            nonNullWriteFn
+        }
+    }
+
+
     private fun generateDataClassWriteToFunction(fields: Map<String, MaybeId>): String {
         val fieldWriterCode = mutableListOf<String>()
         fields.forEach { (fName, ref) ->
             val fieldName = fName.toCamelCase()
-            val nullable = ref.nullable || ref.optional
-            val typeId = (typeDomain[ref.id]?.selfType as? EntityDefinition.ConstrainedScalarType)?.scalarType ?: ref.id
-            val t = (typeDomain[typeId]?.selfType as? EntityDefinition.NativeType)?.qualifiedNames?.get("kotlin")
-            val writeFn = if (t?.fullyQualifiedSerdeObject != null) {
-                "${t.fullyQualifiedSerdeObject}.writeTo(ionWriter, $fieldName)"
-            } else {
-                "$fieldName.writeTo(ionWriter)"
-            }
-
-            fieldWriterCode += if (nullable) {
+            fieldWriterCode +=
                 """
                 |ionWriter.setFieldName("$fName")
-                |if ($fieldName == null) ionWriter.writeNull() else $writeFn
+                |${generateMemberWriter(ref, fieldName)}
                 """
-            } else {
-                """
-                |ionWriter.setFieldName("$fName")
-                |$writeFn
-                """
-            }
         }
 
         return """
@@ -239,30 +268,48 @@ class KotlinGenerator(
         """
     }
 
+
+    private fun generateMemberReader(ref: MaybeId): String {
+        val nullable = ref.nullable || ref.optional
+        val typeId = (typeDomain[ref.id]?.selfType as? EntityDefinition.ConstrainedScalarType)?.scalarType ?: ref.id
+        val actualType = typeDomain[typeId]!!.selfType
+        val nonNullReadFn = if ((actualType as? EntityDefinition.NativeType)?.qualifiedNames?.get("kotlin") != null) {
+            val t = actualType.qualifiedNames["kotlin"]!!
+            "${t.fullyQualifiedSerdeObject}.readFrom(ionReader)"
+        } else if (actualType is EntityDefinition.CollectionType) {
+            val elementReaderFn = generateMemberReader(actualType.item)
+            // TODO: Add support for sets or other collection types
+            """
+            |
+            |mutableListOf<kotlin.String>().apply {
+            |    check(ionReader.type == com.amazon.ion.IonType.LIST)
+            |    ionReader.stepIn()
+            |    try {
+            |        while (ionReader.next() != null) {
+            |            add(${elementReaderFn})
+            |        }
+            |    } finally {
+            |        ionReader.stepOut()
+            |    }
+            |}.toList()
+            |
+            """.trimMargin()
+        } else {
+            "${getResolvedId(typeId)}.readFrom(ionReader)"
+        }
+
+        // TODO: Support for default values, perhaps?
+        return if (!nullable) nonNullReadFn else "if (ionReader.isNullValue) null else $nonNullReadFn"
+    }
+
+
     private fun generateDataClassReadFromFunction(name: String, fields: Map<String, MaybeId>): String {
         val fieldReaderCode = mutableListOf<String>()
         fields.forEach { (fName, ref) ->
-            val nullable = ref.nullable || ref.optional
-            val typeId = (typeDomain[ref.id]?.selfType as? EntityDefinition.ConstrainedScalarType)?.scalarType ?: ref.id
-
-            val t = (typeDomain[typeId]?.selfType as? EntityDefinition.NativeType)?.qualifiedNames?.get("kotlin")
-            val readFn = if (t?.fullyQualifiedSerdeObject != null) {
-                "${t.fullyQualifiedSerdeObject}.readFrom(ionReader)"
-            } else {
-                "${getResolvedId(ref.id)}.readFrom(ionReader)"
-            }
-
-            val builderFn = "with${fName.toPascalCase()}"
-
-            fieldReaderCode += if (nullable) {
+            fieldReaderCode +=
                 """
-                |"$fName" -> if (ionReader.isNullValue) builder.$builderFn(null) else builder.$builderFn($readFn)
+                |"$fName" -> builder.with${fName.toPascalCase()}(${generateMemberReader(ref)})
                 """
-            } else {
-                """
-                |"$fName" -> builder.$builderFn($readFn)
-                """
-            }
         }
 
         // TODO: Ignore or fail on unknown fields?
@@ -476,6 +523,11 @@ class KotlinGenerator(
         |interface Serde<T> {
         |    fun writeTo(ionWriter: IonWriter, value: T)
         |    fun readFrom(ionReader: IonReader): T
+        |}
+        |
+        |interface CollectionSerde<T: Iterable<E>, E> {
+        |    fun writeTo(ionWriter: IonWriter, value: T, itemWriteFn: (E) -> Unit)
+        |    fun readFrom(ionReader: IonReader, itemReadFn: () -> E): T
         |}
         |
         |object StringSerde: Serde<String> {
