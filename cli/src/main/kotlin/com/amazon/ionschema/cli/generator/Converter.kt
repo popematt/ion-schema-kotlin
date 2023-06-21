@@ -23,7 +23,6 @@ import com.amazon.ionschema.model.TypeDefinition
 import com.amazon.ionschema.model.ValidValue
 import com.amazon.ionschema.model.VariablyOccurringTypeArgument.Companion.OCCURS_OPTIONAL
 import com.amazon.ionschema.model.VariablyOccurringTypeArgument.Companion.OCCURS_REQUIRED
-import com.amazon.ionschema.model.mapToSet
 import com.amazon.ionschema.util.toBag
 
 /**
@@ -73,15 +72,13 @@ class Converter(private val schemaDocuments: List<SchemaDocument>, val options: 
                             Triple(typeField.fieldName, lang, binding)
                         }
                             .groupBy { (typeId, _, _) -> typeId }
-                            .mapValues { (_, typeMapping) -> typeMapping.associate { (_, lang, qualifiedName) -> lang to qualifiedName }}
+                            .mapValues { (_, typeMapping) -> typeMapping.associate { (_, lang, qualifiedName) -> lang to qualifiedName } }
                             .map { (typeId, mapping) -> NativeTypeMapping(schemaId, typeId, mapping) }
                     }
                 }
                 .toList()
         }
     }
-
-
 
     /**
      * Fields that code generator will check to find documentation. Plain text is recommended since code gen will not
@@ -101,8 +98,8 @@ class Converter(private val schemaDocuments: List<SchemaDocument>, val options: 
     val CODEGEN_KIND = "\$codegen_kind"
 
     // Todo?
-    ///** top level open content that is a type definition that is only used for code generation */
-    //val CODEGEN_TYPE = "\$codegen_type"
+    // /** top level open content that is a type definition that is only used for code generation */
+    // val CODEGEN_TYPE = "\$codegen_type"
 
     fun OpenContentFields.getDocs(): String? = firstOrNull { it.first in DOC_FIELDS && it.second is IonText }?.second?.into<IonText>()?.stringValue()
     fun TypeDefinition.getCodegenNativeTypeMapping(): Map<String, NativeTypeBinding>? = openContent.getAtMostOne(CODEGEN_USE)?.tryInto<IonStruct>()?.associate { it.fieldName to NativeTypeBinding.readFrom(it) }
@@ -110,7 +107,6 @@ class Converter(private val schemaDocuments: List<SchemaDocument>, val options: 
     fun TypeDefinition.getCodegenIgnore() = openContent.getAtMostOne(CODEGEN_IGNORE)?.into<IonBool>()?.booleanValue()
     fun TypeDefinition.getCodegenName(): String? = openContent.getAtMostOne(CODEGEN_NAME)?.tryInto<IonText>()?.stringValue()
     fun OpenContentFields.getAtMostOne(name: String): IonValue? = filter { it.first == name }.also { check(it.size <= 1) }.singleOrNull()?.second
-
 
     fun toTypeDomain(): TypeDomain {
         val containers = schemaDocuments.map {
@@ -126,7 +122,7 @@ class Converter(private val schemaDocuments: List<SchemaDocument>, val options: 
                 children = emptyList()
             )
         }
-        return TypeDomain( nativeTypeBindings + containers)
+        return TypeDomain(nativeTypeBindings + containers)
     }
 
     /**
@@ -155,7 +151,6 @@ class Converter(private val schemaDocuments: List<SchemaDocument>, val options: 
             children = declaredTypes.map { (_, type) -> type.toTypeDomainNode(id) }
         )
     }
-
 
     private fun flattenTypeArg(currentSchema: SchemaDocument, argument: TypeArgument): TypeDefinition? {
         return when (argument) {
@@ -195,7 +190,6 @@ class Converter(private val schemaDocuments: List<SchemaDocument>, val options: 
                 }
             }
         }
-
     }
 
     private fun TypeDefinition.flatten(currentSchema: SchemaDocument): TypeDefinition {
@@ -302,7 +296,6 @@ class Converter(private val schemaDocuments: List<SchemaDocument>, val options: 
         return TypeDefinition(newConstraints.toSet(), newOpenContent.toBag())
     }
 
-
     /**
      * Merges similar constraints
      */
@@ -339,7 +332,6 @@ class Converter(private val schemaDocuments: List<SchemaDocument>, val options: 
         )
     }
 
-
     // TODO: Pass around a mutable list for children so that we can embed any inline type definitions.
 
     private fun TypeDefinition.toEntityDefinition(parentId: Id, children: MutableList<Node>): EntityDefinition {
@@ -353,7 +345,9 @@ class Converter(private val schemaDocuments: List<SchemaDocument>, val options: 
                 EntityDefinition.EnumType(
                     constraints.filterIsInstance<Constraint.ValidValues>()
                         .single().values
-                        .map { (it as ValidValue.Value).value.into<IonText>().stringValue() }, this)
+                        .map { (it as ValidValue.Value).value.into<IonText>().stringValue() },
+                    this
+                )
             }
             // Discriminated union
             hasSingleOneOfConstraint(constraints) -> {
@@ -362,7 +356,7 @@ class Converter(private val schemaDocuments: List<SchemaDocument>, val options: 
                     val variantName = when (it) {
                         is TypeArgument.Import -> it.typeName
                         is TypeArgument.InlineType -> it.typeDefinition.getCodegenName() ?: "variant$idx"
-                        is TypeArgument.Reference ->  it.typeName
+                        is TypeArgument.Reference -> it.typeName
                     }
                     val ref = toEntityReference(parentId, variantName, it, children)
                     variantName to ref
@@ -401,14 +395,11 @@ class Converter(private val schemaDocuments: List<SchemaDocument>, val options: 
             // TODO: Map type
             // TODO: Set type?
 
-
             // TODO: Tuple type
             // Tuple type must be able to handle occurs with any arbitrary value
             // Should be the default if there's an ordered elements constraint
 
-
             else -> TODO("Something else? $this")
-
         }
     }
 
@@ -416,18 +407,18 @@ class Converter(private val schemaDocuments: List<SchemaDocument>, val options: 
         return constraints.any {
             // Symbol/String
             it is Constraint.Regex ||
-                    it is Constraint.CodepointLength ||
-                    it is Constraint.Utf8ByteLength ||
-                    // Timestamp
-                    it is Constraint.TimestampPrecision ||
-                    it is Constraint.TimestampOffset ||
-                    // Decimal
-                    it is Constraint.Exponent ||
-                    it is Constraint.Precision ||
-                    // Blob/Clob
-                    it is Constraint.ByteLength ||
-                    // Float
-                    it is Constraint.Ieee754Float
+                it is Constraint.CodepointLength ||
+                it is Constraint.Utf8ByteLength ||
+                // Timestamp
+                it is Constraint.TimestampPrecision ||
+                it is Constraint.TimestampOffset ||
+                // Decimal
+                it is Constraint.Exponent ||
+                it is Constraint.Precision ||
+                // Blob/Clob
+                it is Constraint.ByteLength ||
+                // Float
+                it is Constraint.Ieee754Float
         }
     }
 
@@ -437,8 +428,8 @@ class Converter(private val schemaDocuments: List<SchemaDocument>, val options: 
     }
 
     private fun isParameterizedList(constraints: Set<Constraint>): Boolean {
-        return constraints.any { it is Constraint.Type && it.type == TypeArgument.Reference("list") }
-                && constraints.any { it is Constraint.Element }
+        return constraints.any { it is Constraint.Type && it.type == TypeArgument.Reference("list") } &&
+            constraints.any { it is Constraint.Element }
     }
 
     private fun hasSingleOneOfConstraint(constraints: Set<Constraint>): Boolean {

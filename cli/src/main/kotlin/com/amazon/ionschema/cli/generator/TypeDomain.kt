@@ -48,7 +48,7 @@ fun EntityDefinition.toIon() = when (this) {
         addTypeAnnotation("record")
         components.forEach { (k, v) -> add(k, v.toIon()) }
     }
-    is EntityDefinition.SumType ->  ION.newEmptyStruct().apply {
+    is EntityDefinition.SumType -> ION.newEmptyStruct().apply {
         addTypeAnnotation("sum")
         variants.forEach { (k, v) -> add(k, v.toIon()) }
     }
@@ -76,7 +76,7 @@ fun EntityDefinition.toIon() = when (this) {
 }
 
 data class Id(val parts: List<String>) {
-    constructor(vararg parts: String): this(parts.toList())
+    constructor(vararg parts: String) : this(parts.toList())
     operator fun plus(name: String): Id = Id(parts + name)
     operator fun plus(other: Id): Id = Id(parts + other.parts)
     val name: String get() = parts.lastOrNull() ?: ""
@@ -106,15 +106,15 @@ sealed class EntityDefinition {
 
     // TODO: Interfaces? Maybe needs to have a `$codegen_implements` field in implementations
     /** I.e. like a Java enum */
-    data class EnumType(val values: List<String>, override val typeDefinition: TypeDefinition? = null): EntityDefinition()
+    data class EnumType(val values: List<String>, override val typeDefinition: TypeDefinition? = null) : EntityDefinition()
     /** AKA discriminated union (that can hold state); like a Rust enum or Kotlin sealed class */
-    data class SumType(val variants: Map<String, MaybeId>, override val typeDefinition: TypeDefinition? = null): EntityDefinition()
+    data class SumType(val variants: Map<String, MaybeId>, override val typeDefinition: TypeDefinition? = null) : EntityDefinition()
     /** I.e. POJO, kotlin data class, etc. */
-    data class RecordType(val components: Map<String, MaybeId>, override val typeDefinition: TypeDefinition? = null): EntityDefinition()
+    data class RecordType(val components: Map<String, MaybeId>, override val typeDefinition: TypeDefinition? = null) : EntityDefinition()
     /** I.e. like a Rust tuple struct */
-    data class TupleType(val components: List<MaybeId>, override val typeDefinition: TypeDefinition? = null): EntityDefinition()
+    data class TupleType(val components: List<MaybeId>, override val typeDefinition: TypeDefinition? = null) : EntityDefinition()
     /** A type that is defined by a mapping to fully qualified type names in the target language. */
-    data class NativeType(val qualifiedNames: Map<String, Converter.NativeTypeBinding>, override val typeDefinition: TypeDefinition? = null): EntityDefinition()
+    data class NativeType(val qualifiedNames: Map<String, Converter.NativeTypeBinding>, override val typeDefinition: TypeDefinition? = null) : EntityDefinition()
     /**
      * Parameterized type for e.g. maps, lists, etc.
      * Unlike NativeType, these are hard-coded for certain shapes that look like, e.g. a list, set, or map.
@@ -124,16 +124,16 @@ sealed class EntityDefinition {
      *
      * TODO: Remove in favor of CollectionType and AssociativeCollectionType?
      */
-    data class ParameterizedType(val type: Id, val parameters: List<MaybeId>, override val typeDefinition: TypeDefinition? = null): EntityDefinition()
+    data class ParameterizedType(val type: Id, val parameters: List<MaybeId>, override val typeDefinition: TypeDefinition? = null) : EntityDefinition()
 
     /**
      * For lists, sets, bags, etc.
      */
-    data class CollectionType(val type: Id, val item: MaybeId, override val typeDefinition: TypeDefinition? = null): EntityDefinition()
+    data class CollectionType(val type: Id, val item: MaybeId, override val typeDefinition: TypeDefinition? = null) : EntityDefinition()
     /**
      * For dicts, maps, etc.
      */
-    data class AssociationType(val type: Id, val key: MaybeId, val value: MaybeId, override val typeDefinition: TypeDefinition? = null): EntityDefinition()
+    data class AssociationType(val type: Id, val key: MaybeId, val value: MaybeId, override val typeDefinition: TypeDefinition? = null) : EntityDefinition()
 
     /**
      * Represents a type that is a scalar with some constraints. Some programming languages, such as Rust, can easily
@@ -142,5 +142,5 @@ sealed class EntityDefinition {
      *
      * TODO: rename? Certainly needs to be refined a little bit.
      */
-    data class ConstrainedScalarType(val scalarType: Id, override val typeDefinition: TypeDefinition): EntityDefinition()
+    data class ConstrainedScalarType(val scalarType: Id, override val typeDefinition: TypeDefinition) : EntityDefinition()
 }

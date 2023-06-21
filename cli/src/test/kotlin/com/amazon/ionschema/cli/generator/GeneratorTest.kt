@@ -15,7 +15,9 @@ class GeneratorTest {
 
         val reader = IonSchemaReaderV2_0()
 
-        val schemaDocument = reader.readSchemaOrThrow(ION.loader.load("""
+        val schemaDocument = reader.readSchemaOrThrow(
+            ION.loader.load(
+                """
             ${'$'}ion_schema_2_0
             type::{
               name: foo,
@@ -35,15 +37,20 @@ class GeneratorTest {
                 lastName: { type: string, occurs: required },
               },
             }
-        """.trimIndent())).copy(id = "popematt/types.isl")
+                """.trimIndent()
+            )
+        ).copy(id = "popematt/types.isl")
 
-        val converter = Converter(listOf(schemaDocument), Converter.Options(
-            schemaIdToModuleNamespaceStrategy = {
-                (if (it.endsWith(".isl")) it.dropLast(4) else it)
-                    .split("/", "\\")
-                    .map { it.replace(Regex("[^\\w\\d_]"), "") }
-            }
-        ))
+        val converter = Converter(
+            listOf(schemaDocument),
+            Converter.Options(
+                schemaIdToModuleNamespaceStrategy = {
+                    (if (it.endsWith(".isl")) it.dropLast(4) else it)
+                        .split("/", "\\")
+                        .map { it.replace(Regex("[^\\w\\d_]"), "") }
+                }
+            )
+        )
 
         val typeDomain = converter.toTypeDomain()
 
@@ -60,5 +67,4 @@ class GeneratorTest {
 
         result.forEach { println(it) }
     }
-
 }

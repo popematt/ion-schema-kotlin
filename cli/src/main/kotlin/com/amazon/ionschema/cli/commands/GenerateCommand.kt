@@ -6,8 +6,7 @@ import com.github.ajalt.clikt.core.NoOpCliktCommand
 import com.github.ajalt.clikt.core.context
 import com.github.ajalt.clikt.core.subcommands
 
-
-class GenerateCommand: NoOpCliktCommand(help = "Generate code or code-adjacent things based on a set of schemas.") {
+class GenerateCommand : NoOpCliktCommand(help = "Generate code or code-adjacent things based on a set of schemas.") {
     init {
         context {
             subcommands(

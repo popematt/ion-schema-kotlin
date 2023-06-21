@@ -6,7 +6,7 @@ import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 
-class DumpTypeDomainCommand: CliktCommand() {
+class DumpTypeDomainCommand : CliktCommand() {
     private val ion = IonSystemBuilder.standard().build()
     private val typeDomainGenerator = TypeDomainReader(this, ion)
 

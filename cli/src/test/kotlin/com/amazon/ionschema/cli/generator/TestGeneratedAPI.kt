@@ -16,10 +16,12 @@ class TestGeneratedAPI {
     fun testGeneratedAPI() {
         val alphabetSoup = AlphabetSoup.Builder()
             .withName("Vowel Soup")
-            .withBroth(AlphabetSoup.Broth.builder()
-                .withTemp(BigInteger.TEN)
-                .withFlavor(AlphabetSoup.Broth.Flavor.CHICKEN)
-                .build())
+            .withBroth(
+                AlphabetSoup.Broth.builder()
+                    .withTemp(BigInteger.TEN)
+                    .withFlavor(AlphabetSoup.Broth.Flavor.CHICKEN)
+                    .build()
+            )
             .withLetters(listOf("a", "e", "i", "o", "u"))
             .withCondiment(Condiment.BUTTER)
             .build()

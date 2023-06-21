@@ -9,5 +9,4 @@ class StringsTest {
     fun testToPascalCase() {
         Assertions.assertEquals("AlphabetSoup", "alphabet_soup".toPascalCase())
     }
-
 }

@@ -20,5 +20,5 @@ internal fun IonElement.recursivelyVisit(order: TraversalOrder, visitor: (AnyEle
     }
 }
 
-inline fun <reified T: IonValue> IonValue.tryInto() = this as? T
-inline fun <reified T: IonValue> IonValue.into() = this as T
+inline fun <reified T : IonValue> IonValue.tryInto() = this as? T
+inline fun <reified T : IonValue> IonValue.into() = this as T

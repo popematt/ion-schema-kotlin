@@ -11,7 +11,7 @@ import java.io.File
 import kotlin.io.path.Path
 import kotlin.io.path.writeText
 
-class KotlinCommand: CliktCommand() {
+class KotlinCommand : CliktCommand() {
     private val ion = IonSystemBuilder.standard().build()
     private val typeDomainGenerator = TypeDomainReader(this, ion)
 
@@ -26,7 +26,6 @@ class KotlinCommand: CliktCommand() {
     private val packagePathPrefix by option("-p", "--package-prefix", help = "The root package for all of the generated code").default("")
     override fun run() {
         val typeDomain = typeDomainGenerator.readTypeDomain()
-
 
         val kotlinGenerator = KotlinGenerator(
             typeDomain = typeDomain,
@@ -49,6 +48,4 @@ class KotlinCommand: CliktCommand() {
             echo("Done")
         }
     }
-
-
 }

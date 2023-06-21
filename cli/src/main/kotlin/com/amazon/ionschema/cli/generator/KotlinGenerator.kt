@@ -9,7 +9,6 @@ import com.amazon.ionschema.model.DiscreteIntRange
 import com.amazon.ionschema.model.ExperimentalIonSchemaModel
 import java.nio.file.Path
 
-
 /**
  * ## Generator
  * - Makes a first pass to create the ID to fully qualified names cache
@@ -102,11 +101,11 @@ class KotlinGenerator(
 
     private fun generateType(id: Id, typeDef: EntityDefinition, nested: String): String {
         val name = id.name.toPascalCase()
-        return when(typeDef) {
+        return when (typeDef) {
             is EntityDefinition.EnumType -> generateEnumType(name, typeDef, nested)
             is EntityDefinition.SumType -> generateSealedTypes(name, typeDef, nested)
             is EntityDefinition.RecordType -> generateDataClassForRecordType(name, typeDef, nested)
-            is EntityDefinition.TupleType -> generateTuple(name, typeDef.components.mapIndexed { idx, it -> "component$idx" to it  }.toMap(), nested)
+            is EntityDefinition.TupleType -> generateTuple(name, typeDef.components.mapIndexed { idx, it -> "component$idx" to it }.toMap(), nested)
             // Output nothing for constrained scalar types. Their constraints are added to init blocks.
             is EntityDefinition.ConstrainedScalarType -> ""
             // Output nothing for anything else since we resolve this as type references
@@ -132,9 +131,8 @@ class KotlinGenerator(
             "|$mut ${fName.toCamelCase()}: ${generateCodeForMaybeId(ref)},"
         }
 
-
         return """
-        |${visibility} data class ${name}(
+        |$visibility data class $name(
         |    ${generatedFields.indentLines()}
         |) {
         |    ${generateDataClassInitBlock(entityDefinition.components).indentLines()}
@@ -212,7 +210,6 @@ class KotlinGenerator(
         }
     }
 
-
     private fun generateMemberWriter(ref: MaybeId, variableName: String): String {
         val nullable = ref.nullable || ref.optional
         val typeId = (typeDomain[ref.id]?.selfType as? EntityDefinition.ConstrainedScalarType)?.scalarType ?: ref.id
@@ -223,14 +220,14 @@ class KotlinGenerator(
         } else if (actualType is EntityDefinition.CollectionType) {
             val elementWriterFn = generateMemberWriter(actualType.item, "it")
             """
-            ionWriter.stepIn(com.amazon.ion.IonType.LIST)
-            try {
-                $variableName.forEach { 
-                    $elementWriterFn 
-                }
-            } finally {
-                ionWriter.stepOut()
-            }
+            |ionWriter.stepIn(com.amazon.ion.IonType.LIST)
+            |try {
+            |    $variableName.forEach { 
+            |        ${elementWriterFn.indentLines(2)} 
+            |    }
+            |} finally {
+            |    ionWriter.stepOut()
+            |}
             """.trimIndent()
         } else {
             "$variableName.writeTo(ionWriter)"
@@ -238,25 +235,21 @@ class KotlinGenerator(
 
         return if (nullable) {
             """
-            if ($variableName == null) ionWriter.writeNull() else {
-                $nonNullWriteFn
-            }
+            |if ($variableName == null) ionWriter.writeNull() else {
+            |    $nonNullWriteFn
+            |}
             """.trimIndent()
         } else {
             nonNullWriteFn
         }
     }
 
-
     private fun generateDataClassWriteToFunction(fields: Map<String, MaybeId>): String {
         val fieldWriterCode = mutableListOf<String>()
         fields.forEach { (fName, ref) ->
             val fieldName = fName.toCamelCase()
-            fieldWriterCode +=
-                """
-                |ionWriter.setFieldName("$fName")
-                |${generateMemberWriter(ref, fieldName)}
-                """
+            fieldWriterCode += """|ionWriter.setFieldName("$fName")"""
+            fieldWriterCode += generateMemberWriter(ref, fieldName)
         }
 
         return """
@@ -271,7 +264,6 @@ class KotlinGenerator(
         """
     }
 
-
     private fun generateMemberReader(ref: MaybeId): String {
         val nullable = ref.nullable || ref.optional
         val typeId = (typeDomain[ref.id]?.selfType as? EntityDefinition.ConstrainedScalarType)?.scalarType ?: ref.id
@@ -283,20 +275,16 @@ class KotlinGenerator(
             val elementReaderFn = generateMemberReader(actualType.item)
             // TODO: Add support for sets or other collection types
             """
-            |
             |mutableListOf<${generateCodeForMaybeId(actualType.item)}>().apply {
             |    check(ionReader.type == com.amazon.ion.IonType.LIST)
             |    ionReader.stepIn()
             |    try {
-            |        while (ionReader.next() != null) {
-            |            add(${elementReaderFn})
-            |        }
+            |        while (ionReader.next() != null) add($elementReaderFn)
             |    } finally {
             |        ionReader.stepOut()
             |    }
             |}.toList()
-            |
-            """.trimMargin()
+            """
         } else {
             "${getResolvedId(typeId)}.readFrom(ionReader)"
         }
@@ -305,13 +293,12 @@ class KotlinGenerator(
         return if (!nullable) nonNullReadFn else "if (ionReader.isNullValue) null else $nonNullReadFn"
     }
 
-
     private fun generateDataClassReadFromFunction(name: String, fields: Map<String, MaybeId>): String {
         val fieldReaderCode = mutableListOf<String>()
         fields.forEach { (fName, ref) ->
             fieldReaderCode +=
                 """
-                |"$fName" -> builder.with${fName.toPascalCase()}(${generateMemberReader(ref)})
+                |"$fName" -> builder.with${fName.toPascalCase()}(${generateMemberReader(ref).indentLines(1)})
                 """
         }
 
@@ -336,7 +323,6 @@ class KotlinGenerator(
         """
     }
 
-
     fun generateBuilder(name: String, fields: Map<String, MaybeId>): String {
         val generatedBuilderVars = mutableListOf<String>()
         val generatedBuilderFuns = mutableListOf<String>()
@@ -353,20 +339,25 @@ class KotlinGenerator(
 
         return """
         |class Builder {
-        |    ${generatedBuilderVars.joinWithMargin("""
-        |    """)}
+        |    ${generatedBuilderVars.joinWithMargin(
+            """
+        |    """
+        )}
         |
-        |    ${generatedBuilderFuns.joinWithMargin("""
-        |    """)}
+        |    ${generatedBuilderFuns.joinWithMargin(
+            """
+        |    """
+        )}
         |
         |    fun build() = $name(
-        |        ${generatedBuildCtorArgs.joinWithMargin("""
-        |        """)}
+        |        ${generatedBuildCtorArgs.joinWithMargin(
+            """
+        |        """
+        )}
         |    )
         |}
         """
     }
-
 
     private fun List<String>.joinWithMargin(margin: String): String = flatMap { it.lines() }.joinToString("") { margin + it }
     private fun String.indentLines(i: Int = 1): String = replaceIndentByMargin("|" + ("    ".repeat(i))).trimStart { it == '|' || it.isWhitespace() }
@@ -380,14 +371,13 @@ class KotlinGenerator(
         }
 
         return """
-        |${visibility} data class ${name}(
-        |${generatedFields}
+        |$visibility data class $name(
+        |$generatedFields
         |) {
         |    ${nested.lines().joinToString("\n|    ")}
         |}
         """.trimMargin()
     }
-
 
     private fun generateSealedTypes(name: String, typeDef: EntityDefinition.SumType, nested: String): String {
         val visibility = if (options.publicTypes) "public" else "internal"
@@ -405,11 +395,11 @@ class KotlinGenerator(
         val enumVariants = variants.map { (key, typeRef) ->
             val r = generateCodeForMaybeId(typeRef)
             val variantName = key.toPascalCase()
-            "$visibility $variantClassType class ${variantName}(val value: ${r}): ${name}${maybeInvokeConstructor}"
+            "$visibility $variantClassType class $variantName(val value: $r): ${name}$maybeInvokeConstructor"
         }.joinToString("\n")
 
         return """
-        |${visibility} sealed $interfaceOrAbstractClass $name {
+        |$visibility sealed $interfaceOrAbstractClass $name {
         |    ${enumVariants.lines().joinToString("\n|    ")}
         |    ${nested.lines().joinToString("\n|    ")}
         |}
@@ -418,10 +408,10 @@ class KotlinGenerator(
 
     private fun generateEnumType(name: String, typeDef: EntityDefinition.EnumType, nested: String): String {
         val visibility = if (options.publicTypes) "public" else "internal"
-        val enumValues = typeDef.values.joinToString { "${it.toScreamingSnakeCase()}(\"$it\")"  }
+        val enumValues = typeDef.values.joinToString { "${it.toScreamingSnakeCase()}(\"$it\")" }
         return """
-        |${visibility} enum class ${name}(val symbolText: String) {
-        |    ${enumValues};
+        |$visibility enum class $name(val symbolText: String) {
+        |    $enumValues;
         |    
         |    companion object {
         |        @JvmStatic
@@ -444,12 +434,11 @@ class KotlinGenerator(
         """.trimMargin()
     }
 
-
     private fun generatePackage(node: Node) {
         check(node.selfType is Nothing?)
 
         for (child in node.children) {
-            if (child.selfType != null)  {
+            if (child.selfType != null) {
                 generateFile(child)
             } else {
                 generatePackage(child)
@@ -480,7 +469,7 @@ class KotlinGenerator(
 
         val nested = node.children.joinToString("\n") { generateClass(it) }
         val generatedType = generateType(node.id, node.selfType, nested)
-        return "${docs}\n${generatedType}".lines().filter { it.isNotBlank() }.joinToString("\n")
+        return "${docs}\n$generatedType".lines().filter { it.isNotBlank() }.joinToString("\n")
     }
 
     fun generateTypeDomain(): List<KotlinFile> {
@@ -505,7 +494,6 @@ class KotlinGenerator(
 
         return files
     }
-
 
     private fun generateUtilFile() {
         val thisPackage = getResolvedId(Id()) + "__internal__"
